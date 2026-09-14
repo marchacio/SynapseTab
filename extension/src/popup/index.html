@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SynapseTab Workspaces</title>
+  <link rel="stylesheet" href="./popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Synapse<span>Tab</span></h1>
+          <div class="status-badge" id="statusBadge">
+            <span class="status-indicator"></span>
+            <span class="status-label" id="statusLabel">Idle</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="syncNowBtn" class="icon-button" title="Synchronize with remote">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+        <button id="toggleSettingsBtn" class="icon-button" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Settings Drawer (Collapsible) -->
+    <section id="settingsDrawer" class="settings-drawer hidden">
+      <div class="settings-header">
+        <h3>Sync Configuration</h3>
+      </div>
+      <div class="form-group">
+        <label for="settingBackendUrl">Backend URL</label>
+        <input type="text" id="settingBackendUrl" placeholder="http://localhost:8080">
+      </div>
+      <div class="form-group">
+        <label for="settingSyncSecret">Sync Secret</label>
+        <input type="password" id="settingSyncSecret" placeholder="Authorization token">
+      </div>
+      <div class="form-group">
+        <label for="settingClientId">Client Identifier</label>
+        <input type="text" id="settingClientId" placeholder="laptop-linux-01">
+      </div>
+      <div class="settings-buttons">
+        <button id="saveSettingsBtn" class="btn btn-primary">Save Settings</button>
+      </div>
+    </section>
+
+    <!-- Main Workspace Section -->
+    <main class="main-content">
+      <div class="section-title">
+        <h2>Workspaces</h2>
+        <button id="addWorkspaceBtn" class="btn btn-sm btn-ghost">+ New</button>
+      </div>
+
+      <!-- Add Workspace Input Row (hidden by default) -->
+      <div id="newWorkspaceRow" class="new-workspace-form hidden">
+        <input type="text" id="newWorkspaceInput" placeholder="Workspace name (e.g. Work, Uni)">
+        <button id="confirmAddWsBtn" class="btn btn-sm btn-primary">Create</button>
+        <button id="cancelAddWsBtn" class="btn btn-sm btn-ghost">Cancel</button>
+      </div>
+
+      <!-- Workspaces List -->
+      <div id="workspacesList" class="workspaces-list">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Active Workspace Tabs Section -->
+      <div class="section-title tabs-section-header">
+        <h2 id="activeWorkspaceTitle">Active Tabs</h2>
+        <span class="badge" id="tabCountBadge">0 tabs</span>
+      </div>
+
+      <div id="tabsList" class="tabs-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span id="lastSyncedText">Not yet synced</span>
+      <span class="version-tag">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script type="module" src="./popup.ts"></script>
+</body>
+</html>

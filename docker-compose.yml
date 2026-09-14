@@ -1,0 +1,30 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: synapsetab-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: synapsetab-server
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - REDIS_URL=redis://redis:6379
+      - SYNC_SECRET=synapse_dev_secret_123
+      - USER_ID=default
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data:

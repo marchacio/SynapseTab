@@ -1,0 +1,30 @@
+{
+  "name": "synapsetab-extension",
+  "version": "1.0.0",
+  "description": "Mozilla Firefox MV3 extension for SynapseTab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "dev:client-a": "web-ext run --firefox-profile=../.firefox-profiles/client-a --keep-profile-changes --source-dir=dist",
+    "dev:client-b": "web-ext run --firefox-profile=../.firefox-profiles/client-b --keep-profile-changes --source-dir=dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "lint:web-ext": "web-ext lint --source-dir=dist",
+    "package": "web-ext build --source-dir=dist --artifacts-dir=../web-ext-artifacts --overwrite-dest"
+  },
+  "devDependencies": {
+    "@types/firefox-webext-browser": "^120.0.5",
+    "@types/node": "^22.13.8",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^3.0.7",
+    "web-ext": "^8.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

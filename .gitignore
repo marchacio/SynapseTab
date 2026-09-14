@@ -1,0 +1,38 @@
+# Node & npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build artifacts
+dist/
+build/
+*.zip
+*.xpi
+web-ext-artifacts/
+
+# Firefox profile testing directories
+.firefox-profiles/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Redis data directory
+redis_data/
+dump.rdb
+appendonly.aof
+appendonlydir/
+
+# Logs
+logs
+*.log
+
+# IDE & OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

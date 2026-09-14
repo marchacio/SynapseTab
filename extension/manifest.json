@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "SynapseTab",
+  "version": "1.0.0",
+  "description": "Ultra-lightweight, self-hosted tab and workspace synchronization for Mozilla Firefox",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "synapsetab@selfhosted.org",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "tabs",
+    "tabHide",
+    "sessions",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    },
+    "default_title": "SynapseTab Workspaces"
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  }
+}
