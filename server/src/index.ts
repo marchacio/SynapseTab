@@ -9,7 +9,6 @@ export async function buildServer(options: { customRedis?: RedisClient } = {}): 
   const app = Fastify({
     logger: process.env.NODE_ENV === 'test' ? false : {
       level: 'info',
-      transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
     },
     ajv: {
       customOptions: {
