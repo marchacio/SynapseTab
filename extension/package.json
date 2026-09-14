@@ -7,8 +7,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
-    "dev:client-a": "web-ext run --firefox-profile=../.firefox-profiles/client-a --keep-profile-changes --source-dir=dist",
-    "dev:client-b": "web-ext run --firefox-profile=../.firefox-profiles/client-b --keep-profile-changes --source-dir=dist",
+    "dev:client-a": "web-ext run --firefox-profile=../.firefox-profiles/client-a --profile-create-if-missing --keep-profile-changes --source-dir=dist",
+    "dev:client-b": "web-ext run --firefox-profile=../.firefox-profiles/client-b --profile-create-if-missing --keep-profile-changes --source-dir=dist",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
