@@ -1,24 +1,28 @@
-# SynapseTab 🧠⚡
+# SynapseTab
 
-> **Ultra-lightweight, self-hosted workspace and tab state synchronization for Mozilla Firefox.**
+**Ultra-lightweight, self-hosted workspace and tab state synchronization for Mozilla Firefox.**
 
-[![Continuous Integration](https://github.com/marco/SynapseTab/actions/workflows/ci.yml/badge.svg)](https://github.com/marco/SynapseTab/actions/workflows/ci.yml)
+[![Continuous Integration](https://github.com/marchacio/SynapseTab/actions/workflows/ci.yml/badge.svg)](https://github.com/marco/SynapseTab/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Firefox Manifest V3](https://img.shields.io/badge/Firefox-Manifest%20V3-FF7139.svg)](https://addons.mozilla.org)
 [![Docker Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-blue)](https://ghcr.io)
 
 ---
 
-## 1. Project Mission & Identity
+> Note: This project is currently under development. You’re welcome to try it out, modify it, improve it and report any bugs on the dedicated Issues page, or open a Pull Request – thank you very much for your help!
+This project was created to meet my own needs, but as I’m a strong believer in the open-source community, I thought it would be useful and helpful to make it public and available to everyone 😄
 
-SynapseTab is a 100% Free and Open-Source Software (FOSS) tab and workspace synchronization system engineered for multi-workstation setups. It replaces proprietary cloud synchronization with a sovereign, self-hosted solution that requires:
+
+## 1. Project GOALS
+
+SynapseTab is an Open-Source tab and workspace synchronization system engineered for multi-workstation setups. It replaces proprietary cloud synchronization with a self-hosted solution that requires:
 - **Zero cloud reliance**
 - **Zero user accounts or telemetry**
 - **Zero perceived latency**
 
 ---
 
-## 2. Core Architecture & Engineering Pillars
+## 2. Core Architecture
 
 ```mermaid
 graph TD
@@ -52,7 +56,7 @@ graph TD
     DiffB --> VisibilityB
 ```
 
-### 1. Workspaces via Tab Visibility
+### 1. Workspaces
 Workspaces in SynapseTab **never** partition cookies, LocalStorage, or session tokens. All tabs live in the same window under a unified browsing context:
 - Inactive workspace tabs are tucked away using `browser.tabs.hide()`.
 - Active workspace tabs are made visible with `browser.tabs.show()`.
@@ -61,7 +65,7 @@ Workspaces in SynapseTab **never** partition cookies, LocalStorage, or session t
 ### 2. Stable Tab Identity
 Because Firefox internal `tabId`s are volatile across browser restarts, SynapseTab assigns an immutable UUIDv4 upon tab creation and persists it across sessions using `browser.sessions.setTabValue(tabId, "tab_uuid", uuid)`.
 
-### 3. Aggregation & Debounce Pipeline
+### 3. Aggregation & Debounce
 Local tab operations (`tabs.onCreated`, `tabs.onUpdated`, `tabs.onRemoved`, `tabs.onMoved`, `tabs.onActivated`) are aggregated in memory. State sync payloads are dispatched to the backend only after a strict **1000ms debounce** window of user inactivity.
 
 ### 4. Lazy Tab Materialization
@@ -71,16 +75,12 @@ browser.tabs.create({ url: remoteTab.url, discarded: true, active: false })
 ```
 This guarantees **zero network requests** and **zero RAM consumption** until a tab is explicitly brought to focus by the user.
 
-### 5. Pure Diff & Reconciliation Engine (`diff.ts`)
-State reconciliation is computed via a pure, deterministic function:
-$$\text{plan} = \text{reconcile}(\text{localState}, \text{remoteState})$$
-- **Same UUID & Same URL**: Preserved intact (retaining zoom, DOM state, scroll position, and navigation history).
-- **Missing in Local**: Materialized via `tabs.create({ discarded: true })`.
-- **Missing in Remote**: Terminated via `tabs.remove()`.
-- **Index or Pinning Divergence**: Adjusted via `tabs.move()` / `tabs.update()`.
+### 5. Reconciliation algorithm
+State reconciliation is computed via a `diff` algorithm that produces a plan of actions to apply to the local state to match the remote state.
+
 
 ### 6. Durable Persistence Layer
-State is stored in Redis 7+ with Append-Only File (`appendonly yes`) logging enabled, keyed under `tabvortex:workspaces:<user_id>`.
+State is stored in Redis 7+ with Append-Only file (`appendonly yes`) logging enabled, keyed under `tabvortex:workspaces:<user_id>`.
 
 ---
 
@@ -128,29 +128,6 @@ State is stored in Redis 7+ with Append-Only File (`appendonly yes`) logging ena
 
 ## 4. Quickstart & Local Development
 
-### 1. Install Dependencies
-```bash
-git clone https://github.com/marco/SynapseTab.git
-cd SynapseTab
-npm install
-```
-
-### 2. Start Backend & Redis in Dev Mode
-```bash
-docker compose -f docker-compose.dev.yml up -d
-```
-
-### 3. Concurrency Debugging with Two Firefox Profiles
-Simulate two independent workstations communicating with the local backend:
-
-```bash
-# Terminal 1: Launch Client A (profile ./.firefox-profiles/client-a)
-npm run dev:client-a
-
-# Terminal 2: Launch Client B (profile ./.firefox-profiles/client-b)
-npm run dev:client-b
-```
-
 See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full concurrency testing scenarios.
 
 ---
@@ -178,7 +155,7 @@ npm run lint:web-ext
 ## 6. Production Deployment
 
 ### Docker Compose
-Deploy SynapseTab on a home server (Proxmox, Portainer, or standalone Docker) behind a WireGuard VPN or reverse proxy:
+Deploy SynapseTab on a home server (in my case Proxmox, but works also with Portainer, Rancher or just Docker) behind a WireGuard VPN or reverse proxy:
 
 ```bash
 # 1. Create production environment configuration
@@ -198,4 +175,8 @@ docker compose -f deploy/docker-compose.prod.yml up -d
 
 ## 7. License
 
-Released under the **MIT License**. 100% Free and Open-Source Software.
+Released under the **MIT License**. 100% Free and Open-Source Software (FOSS).
+
+## 8. AI usage
+
+The entire project was developed using the Antigravity agent-based IDE, in accordance with all best practices for software development and the use of AI.

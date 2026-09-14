@@ -2,6 +2,8 @@
 
 This guide explains how to develop, test, and debug SynapseTab's tab and workspace synchronization on a single workstation by running two independent Firefox client profile instances alongside the local backend service.
 
+Please note that this guide **will not affect** your default standard Firefox session – the one you use every day – but will create ‘temporary sessions’ solely for the purpose of running tests and checking the functionality of the software.
+
 ---
 
 ## 1. Prerequisites
@@ -63,7 +65,7 @@ npm run dev:server
 
 ---
 
-## 4. Multi-Profile Simulator (Client A & Client B)
+## 4. Multi-Profile simulator (Client A & Client B)
 
 To simulate two distinct workstations syncing across the same server, use the dual profile scripts. Each command initializes an isolated Firefox profile folder under `.firefox-profiles/` and loads the SynapseTab extension in live-reload mode.
 
