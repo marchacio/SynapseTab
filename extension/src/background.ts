@@ -7,12 +7,14 @@ const DEBOUNCE_DELAY_MS = 1000;
 const DEFAULT_SETTINGS: SynapseSettings = {
   backendUrl: 'http://localhost:8080',
   syncSecret: 'synapse_dev_secret_123',
+  userId: 'default',
   clientId: `firefox-${crypto.randomUUID().slice(0, 8)}`,
   pollIntervalSeconds: 15,
 };
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let isApplyingRemoteDiff = false;
+let hasCompletedInitialPull = false;
 let currentStatus: SyncStatus = {
   state: 'idle',
   lastSyncTime: null,
@@ -25,7 +27,11 @@ let currentStatus: SyncStatus = {
 async function loadSettings(): Promise<SynapseSettings> {
   const data = await browser.storage.local.get(['settings']);
   if (data.settings) {
-    return { ...DEFAULT_SETTINGS, ...data.settings };
+    return {
+      ...DEFAULT_SETTINGS,
+      ...data.settings,
+      userId: data.settings.userId || 'default',
+    };
   }
   await browser.storage.local.set({ settings: DEFAULT_SETTINGS });
   return DEFAULT_SETTINGS;
@@ -43,7 +49,7 @@ async function updateStatus(statusUpdate: Partial<SyncStatus>): Promise<void> {
  * Emits local state to the backend after 1000ms debounce.
  */
 async function triggerPushSync(): Promise<void> {
-  if (isApplyingRemoteDiff) {
+  if (isApplyingRemoteDiff || !hasCompletedInitialPull) {
     return;
   }
 
@@ -102,8 +108,8 @@ async function pullSync(): Promise<void> {
 
     const localState = await WorkspaceManager.captureLocalState(settings.clientId);
 
-    // If local state is already newer than or equal to remote state, skip pull reconciliation
-    if (localState.updated_at >= remoteState.updated_at && remoteState.client_id === settings.clientId) {
+    // If remote state was emitted by this very client, we already have it
+    if (remoteState.client_id === settings.clientId) {
       return;
     }
 
@@ -118,7 +124,7 @@ async function pullSync(): Promise<void> {
       // Small timeout to allow tab events to settle
       setTimeout(() => {
         isApplyingRemoteDiff = false;
-      }, 300);
+      }, 600);
     }
 
     await updateStatus({
@@ -268,9 +274,13 @@ async function init(): Promise<void> {
   setupMessageListener();
 
   // Initial pull sync
-  setTimeout(() => {
-    pullSync();
-  }, 1000);
+  try {
+    await pullSync();
+  } catch (err) {
+    console.error('[SynapseTab] Initial pull error:', err);
+  } finally {
+    hasCompletedInitialPull = true;
+  }
 }
 
 init();

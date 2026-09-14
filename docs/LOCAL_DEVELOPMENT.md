@@ -82,6 +82,7 @@ npm run dev:client-a
   3. Verify the settings:
      - **Backend URL**: `http://localhost:8080`
      - **Sync Secret**: `synapse_dev_secret_123`
+     - **User ID**: `default`
      - **Client ID**: `workstation-laptop`
   4. Click **Save Settings**.
 
@@ -100,6 +101,7 @@ npm run dev:client-b
   3. Set:
      - **Backend URL**: `http://localhost:8080`
      - **Sync Secret**: `synapse_dev_secret_123`
+     - **User ID**: `default`
      - **Client ID**: `workstation-desktop`
   4. Click **Save Settings**.
 

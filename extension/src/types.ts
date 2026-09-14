@@ -46,6 +46,7 @@ export interface SynapseSettings {
   backendUrl: string;
   syncSecret: string;
   clientId: string;
+  userId?: string;
   pollIntervalSeconds: number;
 }
 

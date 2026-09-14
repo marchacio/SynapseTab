@@ -16,6 +16,7 @@ const lastSyncedText = document.getElementById('lastSyncedText') as HTMLElement;
 // Settings inputs
 const settingBackendUrl = document.getElementById('settingBackendUrl') as HTMLInputElement;
 const settingSyncSecret = document.getElementById('settingSyncSecret') as HTMLInputElement;
+const settingUserId = document.getElementById('settingUserId') as HTMLInputElement;
 const settingClientId = document.getElementById('settingClientId') as HTMLInputElement;
 
 // Workspaces & Tabs containers
@@ -74,12 +75,14 @@ async function loadAndDisplaySettings(): Promise<void> {
   currentSettings = data.settings || {
     backendUrl: 'http://localhost:8080',
     syncSecret: 'synapse_dev_secret_123',
+    userId: 'default',
     clientId: 'laptop-firefox-01',
     pollIntervalSeconds: 15,
   };
 
   settingBackendUrl.value = currentSettings.backendUrl;
   settingSyncSecret.value = currentSettings.syncSecret;
+  settingUserId.value = currentSettings.userId || 'default';
   settingClientId.value = currentSettings.clientId;
 }
 
@@ -297,6 +300,7 @@ saveSettingsBtn.addEventListener('click', async () => {
   const newSettings: SynapseSettings = {
     backendUrl: settingBackendUrl.value.trim() || 'http://localhost:8080',
     syncSecret: settingSyncSecret.value.trim() || 'synapse_dev_secret_123',
+    userId: settingUserId.value.trim() || 'default',
     clientId: settingClientId.value.trim() || 'laptop-firefox-01',
     pollIntervalSeconds: 15,
   };

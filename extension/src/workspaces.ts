@@ -228,36 +228,30 @@ export class WorkspaceManager {
 
     await this.saveStoredWorkspaces(updatedWorkspaces);
 
-    // 2. Close tabs planned for removal
-    for (const closeAction of plan.tabsToClose) {
-      let targetTabId = closeAction.localTabId;
-      if (!targetTabId) {
-        // Find tab by uuid
-        targetTabId = await this.findTabIdByUuid(closeAction.uuid);
-      }
-
-      if (targetTabId) {
-        try {
-          await browser.tabs.remove(targetTabId);
-        } catch (err) {
-          console.warn(`[WorkspaceManager] Error closing tab ${targetTabId}:`, err);
-        }
-      }
-    }
-
-    // 3. Create new remote tabs with LAZY MATERIALIZATION (discarded: true)
+    // 2. Create new remote tabs with LAZY MATERIALIZATION (discarded: true) FIRST
+    // Creating tabs before closing ensures the browser window never closes due to 0 tabs.
     for (const createAction of plan.tabsToCreate) {
       const { tab, workspaceId } = createAction;
 
       try {
-        // Spec requirement: Newly created tabs MUST be created with discarded: true and active: false
-        const newTab = await browser.tabs.create({
-          url: tab.url,
-          discarded: true,
-          active: false,
-          pinned: tab.pinned,
-          index: tab.index,
-        });
+        const canDiscard = Boolean(tab.url && !tab.url.startsWith('about:'));
+        let newTab: browser.tabs.Tab;
+
+        try {
+          newTab = await browser.tabs.create({
+            url: tab.url,
+            discarded: canDiscard,
+            active: false,
+            pinned: tab.pinned,
+          });
+        } catch {
+          // Fallback if discarded: true is rejected on this URL or environment
+          newTab = await browser.tabs.create({
+            url: tab.url,
+            active: false,
+            pinned: tab.pinned,
+          });
+        }
 
         if (newTab.id !== undefined) {
           await browser.sessions.setTabValue(newTab.id, 'tab_uuid', tab.uuid);
@@ -273,11 +267,11 @@ export class WorkspaceManager {
           }
         }
       } catch (err) {
-        console.error('[WorkspaceManager] Error lazy-creating tab:', err);
+        console.error('[WorkspaceManager] Error creating tab:', err);
       }
     }
 
-    // 4. Update existing tabs
+    // 3. Update existing tabs
     for (const updateAction of plan.tabsToUpdate) {
       let tabId = updateAction.localTabId;
       if (!tabId) {
@@ -311,7 +305,7 @@ export class WorkspaceManager {
       }
     }
 
-    // 5. Move tabs if needed
+    // 4. Move tabs if needed
     for (const moveAction of plan.tabsToMove) {
       let tabId = moveAction.localTabId;
       if (!tabId) {
@@ -326,7 +320,40 @@ export class WorkspaceManager {
       }
     }
 
-    // 6. Switch active workspace if remote specified a different one and it exists
+    // 5. Close tabs planned for removal
+    for (const closeAction of plan.tabsToClose) {
+      let targetTabId = closeAction.localTabId;
+      if (!targetTabId) {
+        targetTabId = await this.findTabIdByUuid(closeAction.uuid);
+      }
+
+      if (targetTabId) {
+        try {
+          await browser.tabs.remove(targetTabId);
+        } catch (err) {
+          console.warn(`[WorkspaceManager] Error closing tab ${targetTabId}:`, err);
+        }
+      }
+    }
+
+    // 6. Ensure active workspace has an active tab
+    const currentWindowTabs = await browser.tabs.query({ currentWindow: true });
+    const targetActiveWs = plan.activeWorkspaceId || activeWsId;
+    const activeWsTabs = [];
+    for (const t of currentWindowTabs) {
+      if (t.id === undefined) continue;
+      const wsId = await this.getTabWorkspaceId(t.id, targetActiveWs);
+      if (wsId === targetActiveWs) {
+        activeWsTabs.push(t);
+      }
+    }
+    if (activeWsTabs.length > 0 && !activeWsTabs.some((t) => t.active)) {
+      try {
+        await browser.tabs.update(activeWsTabs[0].id!, { active: true });
+      } catch {}
+    }
+
+    // 7. Switch active workspace if remote specified a different one and it exists
     if (plan.activeWorkspaceId && plan.activeWorkspaceId !== activeWsId) {
       await this.switchToWorkspace(plan.activeWorkspaceId);
     }

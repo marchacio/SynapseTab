@@ -10,12 +10,13 @@ export class SynapseApiClient {
    */
   static async fetchRemoteState(settings: SynapseSettings): Promise<SyncPayload | null> {
     const url = `${settings.backendUrl.replace(/\/+$/, '')}/api/v1/sync`;
+    const userId = settings.userId || 'default';
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${settings.syncSecret}`,
-        'X-User-Id': settings.clientId,
+        'X-User-Id': userId,
       },
     });
 
@@ -40,13 +41,14 @@ export class SynapseApiClient {
     payload: SyncPayload
   ): Promise<{ status: string; updated_at: number }> {
     const url = `${settings.backendUrl.replace(/\/+$/, '')}/api/v1/sync`;
+    const userId = settings.userId || 'default';
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${settings.syncSecret}`,
-        'X-User-Id': settings.clientId,
+        'X-User-Id': userId,
       },
       body: JSON.stringify(payload),
     });
