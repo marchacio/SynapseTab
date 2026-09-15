@@ -545,6 +545,7 @@ describe('SynapseTab Server Integration Tests', () => {
       // 2. Create 4 backups with small pauses to ensure unique timestamps
       const backupIds: string[] = [];
       for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 2));
         const res = await app.inject({
           method: 'POST',
           url: '/api/v1/backups',

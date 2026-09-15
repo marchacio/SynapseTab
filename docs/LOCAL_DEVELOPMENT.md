@@ -25,10 +25,10 @@ cd SynapseTab
 npm install
 ```
 
-Build the initial extension bundle:
+Build the extension (use this commando also to rebuild after changes):
 
 ```bash
-npm run build:extension
+npm run build
 ```
 
 ---

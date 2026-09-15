@@ -1,7 +1,8 @@
 import { SynapseApiClient } from './api.js';
 import { reconcile } from './diff.js';
 import { WorkspaceManager, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
-import { SynapseSettings, SyncStatus } from './types.js';
+import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
+import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace } from './types.js';
 
 const DEBOUNCE_DELAY_MS = 1000;
 const DEFAULT_SETTINGS: SynapseSettings = {
@@ -199,13 +200,14 @@ function setupAlarms(): void {
  */
 function setupMessageListener(): void {
   browser.runtime.onMessage.addListener(async (message: any) => {
-    switch (message.type) {
-      case 'GET_STATUS':
-        return currentStatus;
+    try {
+      switch (message.type) {
+        case 'GET_STATUS':
+          return currentStatus;
 
-      case 'SYNC_NOW':
-        await pullSync();
-        return currentStatus;
+        case 'SYNC_NOW':
+          await pullSync();
+          return currentStatus;
 
       case 'SWITCH_WORKSPACE': {
         isApplyingRemoteDiff = true;
@@ -236,23 +238,48 @@ function setupMessageListener(): void {
           throw new Error('Cannot delete the only remaining workspace');
         }
         const filtered = stored.filter((w) => w.id !== message.workspaceId);
-        await WorkspaceManager.saveStoredWorkspaces(filtered);
-
-        // Reassign all tabs in deleted workspace to fallback workspace
         const fallbackWs = filtered[0].id;
+
+        // If the workspace being deleted is currently active, switch to fallback workspace first
+        if (activeWs === message.workspaceId) {
+          await WorkspaceManager.switchToWorkspace(fallbackWs);
+        }
+
+        // Close all tabs belonging to the deleted workspace
         const allTabs = await browser.tabs.query({ currentWindow: true });
+        const tabsToClose: number[] = [];
         for (const t of allTabs) {
           if (t.id !== undefined) {
             const ws = await WorkspaceManager.getTabWorkspaceId(t.id, activeWs);
             if (ws === message.workspaceId) {
-              await WorkspaceManager.setTabWorkspaceId(t.id, fallbackWs);
+              tabsToClose.push(t.id);
             }
           }
         }
 
-        if (activeWs === message.workspaceId) {
-          await WorkspaceManager.switchToWorkspace(fallbackWs);
+        // Zero-tab window prevention safeguard
+        const remainingTabsCount = allTabs.length - tabsToClose.length;
+        if (remainingTabsCount <= 0) {
+          try {
+            const fallbackTab = await browser.tabs.create({ active: true, url: 'about:blank' });
+            if (fallbackTab.id !== undefined) {
+              await WorkspaceManager.getOrAssignTabUuid(fallbackTab.id);
+              await WorkspaceManager.setTabWorkspaceId(fallbackTab.id, fallbackWs);
+            }
+          } catch (err) {
+            console.error('[WorkspaceManager] Failed to create fallback tab during workspace deletion:', err);
+          }
         }
+
+        for (const tabId of tabsToClose) {
+          try {
+            await browser.tabs.remove(tabId);
+          } catch (err) {
+            console.warn(`[WorkspaceManager] Failed to close tab ${tabId} during workspace deletion:`, err);
+          }
+        }
+
+        await WorkspaceManager.saveStoredWorkspaces(filtered);
         triggerPushSync();
         return { success: true };
       }
@@ -303,8 +330,47 @@ function setupMessageListener(): void {
       case 'RESTORE_BACKUP': {
         const settings = await loadSettings();
         const res = await SynapseApiClient.restoreBackup(settings, message.backupId);
-        // Trigger immediate pull sync to synchronize active local tabs
-        await pullSync();
+        if (!res || !res.restored_snapshot) {
+          throw new Error('Failed to restore backup snapshot from server');
+        }
+
+        const restoredSnapshot: SyncPayload = res.restored_snapshot;
+        const pinnedTabs: TabItem[] = [];
+        const workspaces: Workspace[] = [];
+
+        for (const ws of (restoredSnapshot.workspaces || [])) {
+          const wsRegularTabs: TabItem[] = [];
+          for (const tab of (ws.tabs || [])) {
+            if (tab.pinned) {
+              if (!pinnedTabs.some((p) => p.url === tab.url || (p.uuid && p.uuid === tab.uuid))) {
+                pinnedTabs.push(tab);
+              }
+            } else {
+              wsRegularTabs.push(tab);
+            }
+          }
+          workspaces.push({
+            id: ws.id,
+            name: ws.name,
+            tabs: wsRegularTabs,
+          });
+        }
+
+        isApplyingRemoteDiff = true;
+        try {
+          await WorkspaceManager.importWorkspacesAndTabs(
+            workspaces.length > 0 ? workspaces : [{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, tabs: [] }],
+            pinnedTabs,
+            'replace',
+            restoredSnapshot.active_workspace_id
+          );
+        } finally {
+          setTimeout(() => {
+            isApplyingRemoteDiff = false;
+            triggerPushSync();
+          }, 600);
+        }
+
         return res;
       }
 
@@ -318,10 +384,51 @@ function setupMessageListener(): void {
         return await SynapseApiClient.updateBackupConfig(settings, message.config);
       }
 
+      case 'EXPORT_STG': {
+        const settings = await loadSettings();
+        const localState = await WorkspaceManager.captureLocalState(settings.clientId);
+        const pinnedTabs = await WorkspaceManager.getPinnedTabs();
+        return exportToStgFormat(localState.workspaces, pinnedTabs);
+      }
+
+      case 'IMPORT_STG': {
+        const { stgData, mode } = message;
+        const parsedResult = importFromStgFormat(stgData);
+        isApplyingRemoteDiff = true;
+        try {
+          await WorkspaceManager.importWorkspacesAndTabs(
+            parsedResult.workspaces,
+            parsedResult.pinnedTabs,
+            mode || 'replace'
+          );
+        } finally {
+          setTimeout(() => {
+            isApplyingRemoteDiff = false;
+            triggerPushSync();
+          }, 500);
+        }
+        return {
+          success: true,
+          workspacesCount: parsedResult.workspaces.length,
+          pinnedCount: parsedResult.pinnedTabs.length,
+          tabsCount: parsedResult.tabCount,
+        };
+      }
+
+      case 'TOGGLE_PIN_TAB': {
+        const newPinned = await WorkspaceManager.togglePinTab(message.tabId);
+        triggerPushSync();
+        return { success: true, pinned: newPinned };
+      }
+
       default:
         return { error: 'Unknown action' };
     }
-  });
+  } catch (err: any) {
+    console.error('[SynapseTab background] Error handling message:', message.type, err);
+    return { error: err.message || String(err) };
+  }
+});
 }
 
 /**

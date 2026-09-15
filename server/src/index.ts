@@ -14,6 +14,7 @@ export interface BuildServerOptions {
 
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
+    bodyLimit: 25 * 1024 * 1024,
     logger: process.env.NODE_ENV === 'test' ? false : {
       level: 'info',
     },

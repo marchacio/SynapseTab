@@ -9,7 +9,12 @@ export const DEFAULT_WORKSPACE_NAME = 'Main';
  */
 export function isSafeWebUrl(url?: string): boolean {
   if (!url) return false;
-  return url.startsWith('http://') || url.startsWith('https://') || url === 'about:blank';
+  return (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('about:') ||
+    url.startsWith('moz-extension://')
+  );
 }
 
 /**
@@ -286,14 +291,15 @@ export class WorkspaceManager {
 
       try {
         const isSafe = isSafeWebUrl(tab.url);
-        const canDiscard = Boolean(isSafe && tab.url !== 'about:blank');
+        const isHttp = Boolean(tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://')));
+        const canDiscard = isHttp;
         let newTab: browser.tabs.Tab;
 
         const createProps: browser.tabs._CreateCreateProperties = {
           active: false,
           pinned: tab.pinned,
         };
-        if (isSafe && tab.url) {
+        if (isSafe && tab.url && tab.url !== 'about:newtab') {
           createProps.url = tab.url;
         }
 
@@ -448,6 +454,280 @@ export class WorkspaceManager {
           await browser.tabs.update(activeWsTabs[0].id!, { active: true });
         } catch {}
       }
+    }
+  }
+
+  /**
+   * Toggles the pinned status of a tab.
+   */
+  static async togglePinTab(tabId: number): Promise<boolean> {
+    const tab = await browser.tabs.get(tabId);
+    const newPinned = !tab.pinned;
+    await browser.tabs.update(tabId, { pinned: newPinned });
+    return newPinned;
+  }
+
+  /**
+   * Retrieves all currently pinned tabs in the active window.
+   */
+  static async getPinnedTabs(): Promise<TabItem[]> {
+    const tabs = await browser.tabs.query({ currentWindow: true, pinned: true });
+    const pinnedItems: TabItem[] = [];
+
+    for (const tab of tabs) {
+      if (tab.id === undefined) continue;
+      const uuid = await this.getOrAssignTabUuid(tab.id);
+      pinnedItems.push({
+        uuid,
+        url: tab.url || 'about:blank',
+        title: tab.title || 'Pinned Tab',
+        favIconUrl: tab.favIconUrl,
+        pinned: true,
+        index: tab.index,
+        localTabId: tab.id,
+      });
+    }
+
+    return pinnedItems;
+  }
+
+  /**
+   * Imports workspaces and pinned tabs in either 'merge' or 'replace' mode.
+   */
+  static async importWorkspacesAndTabs(
+    importedWorkspaces: Workspace[],
+    importedPinnedTabs: TabItem[],
+    mode: 'merge' | 'replace' = 'replace',
+    preferredActiveWorkspaceId?: string
+  ): Promise<void> {
+    if (importedWorkspaces.length === 0) {
+      importedWorkspaces = [{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, tabs: [] }];
+    }
+
+    // Helper to safely create a tab with lazy materialization support
+    const createSafeTab = async (
+      url: string,
+      title: string | undefined,
+      isActive: boolean,
+      isPinned: boolean,
+      wsId: string,
+      uuid: string
+    ): Promise<number | undefined> => {
+      const isHttp = url.startsWith('http://') || url.startsWith('https://');
+      const isAbout = url.startsWith('about:');
+      const safeUrl = isHttp || isAbout || url.startsWith('moz-extension://') ? url : 'about:blank';
+      const canDiscard = isHttp && !isActive;
+
+      let newTab: browser.tabs.Tab | undefined;
+
+      if (canDiscard) {
+        try {
+          newTab = await browser.tabs.create({
+            url: safeUrl,
+            active: false,
+            pinned: isPinned,
+            discarded: true,
+            title: title || undefined,
+          });
+        } catch {
+          // Fallback without discarded
+        }
+      }
+
+      if (!newTab) {
+        try {
+          newTab = await browser.tabs.create({
+            url: safeUrl === 'about:newtab' ? undefined : safeUrl,
+            active: isActive,
+            pinned: isPinned,
+          });
+        } catch {
+          try {
+            newTab = await browser.tabs.create({
+              active: isActive,
+              pinned: isPinned,
+              url: isHttp ? safeUrl : undefined,
+            });
+          } catch (err) {
+            console.warn('[WorkspaceManager] Failed to create tab:', safeUrl, err);
+            return undefined;
+          }
+        }
+      }
+
+      if (newTab && newTab.id !== undefined) {
+        await browser.sessions.setTabValue(newTab.id, 'tab_uuid', uuid);
+        await this.setTabWorkspaceId(newTab.id, wsId);
+        return newTab.id;
+      }
+      return undefined;
+    };
+
+    if (mode === 'replace') {
+      // 1. Query and record IDs of all existing tabs before creating imported ones
+      const existingTabs = await browser.tabs.query({ currentWindow: true });
+      const oldTabIds = existingTabs
+        .filter((t) => t.id !== undefined)
+        .map((t) => t.id as number);
+
+      const targetActiveWs = (preferredActiveWorkspaceId && importedWorkspaces.some((w) => w.id === preferredActiveWorkspaceId))
+        ? preferredActiveWorkspaceId
+        : importedWorkspaces[0].id;
+
+      const createdTabIds = new Set<number>();
+      const tabsToHide: number[] = [];
+
+      // 2. Create pinned tabs from imported list
+      for (const pinTab of importedPinnedTabs) {
+        const createdId = await createSafeTab(
+          pinTab.url,
+          pinTab.title,
+          false,
+          true,
+          targetActiveWs,
+          pinTab.uuid || crypto.randomUUID()
+        );
+        if (createdId !== undefined) {
+          createdTabIds.add(createdId);
+        }
+      }
+
+      // 3. Create tabs for active workspace
+      const activeWs = importedWorkspaces.find((w) => w.id === targetActiveWs) || importedWorkspaces[0];
+      let activeTabCreated = false;
+
+      for (let i = 0; i < activeWs.tabs.length; i++) {
+        const tab = activeWs.tabs[i];
+        const isFirst = i === 0;
+        const createdId = await createSafeTab(
+          tab.url,
+          tab.title,
+          isFirst,
+          false,
+          targetActiveWs,
+          tab.uuid || crypto.randomUUID()
+        );
+        if (createdId !== undefined) {
+          createdTabIds.add(createdId);
+          if (isFirst) activeTabCreated = true;
+        }
+      }
+
+      // Fallback if active workspace had no tabs created
+      if (!activeTabCreated) {
+        const fallbackId = await createSafeTab(
+          'about:blank',
+          'New Tab',
+          true,
+          false,
+          targetActiveWs,
+          crypto.randomUUID()
+        );
+        if (fallbackId !== undefined) {
+          createdTabIds.add(fallbackId);
+        }
+      }
+
+      // 4. Create tabs for inactive workspaces
+      for (const otherWs of importedWorkspaces) {
+        if (otherWs.id === targetActiveWs) continue;
+        for (const tab of otherWs.tabs) {
+          const createdId = await createSafeTab(
+            tab.url,
+            tab.title,
+            false,
+            false,
+            otherWs.id,
+            tab.uuid || crypto.randomUUID()
+          );
+          if (createdId !== undefined) {
+            createdTabIds.add(createdId);
+            tabsToHide.push(createdId);
+          }
+        }
+      }
+
+      // 5. Hide inactive tabs in batch
+      if (tabsToHide.length > 0) {
+        try {
+          await browser.tabs.hide(tabsToHide);
+        } catch (err) {
+          console.warn('[WorkspaceManager] Failed to batch hide inactive tabs on import:', err);
+        }
+      }
+
+      // 6. Close ONLY the old tabs that existed prior to import
+      for (const oldId of oldTabIds) {
+        if (!createdTabIds.has(oldId)) {
+          try {
+            await browser.tabs.remove(oldId);
+          } catch {}
+        }
+      }
+
+      // 7. Save stored workspaces and active workspace ID
+      await this.saveStoredWorkspaces(
+        importedWorkspaces.map((w) => ({ id: w.id, name: w.name }))
+      );
+      await this.setActiveWorkspaceId(targetActiveWs);
+
+    } else {
+      // MODE: 'merge'
+      const stored = await this.getStoredWorkspaces();
+      const existingIds = new Set(stored.map((w) => w.id));
+      const newWorkspacesToStore: { id: string; name: string }[] = [...stored];
+      const tabsToHide: number[] = [];
+
+      // Create pinned tabs if not existing
+      const existingPinned = await browser.tabs.query({ currentWindow: true, pinned: true });
+      const existingPinnedUrls = new Set(existingPinned.map((t) => t.url));
+
+      for (const pinTab of importedPinnedTabs) {
+        if (!existingPinnedUrls.has(pinTab.url)) {
+          await createSafeTab(
+            pinTab.url,
+            pinTab.title,
+            false,
+            true,
+            stored[0]?.id || DEFAULT_WORKSPACE_ID,
+            pinTab.uuid || crypto.randomUUID()
+          );
+        }
+      }
+
+      // Append new workspaces and create their hidden tabs
+      for (const ws of importedWorkspaces) {
+        let wsId = ws.id;
+        if (existingIds.has(wsId)) {
+          wsId = `ws-${crypto.randomUUID().slice(0, 6)}`;
+        }
+        existingIds.add(wsId);
+        newWorkspacesToStore.push({ id: wsId, name: ws.name });
+
+        for (const tab of ws.tabs) {
+          const createdId = await createSafeTab(
+            tab.url,
+            tab.title,
+            false,
+            false,
+            wsId,
+            tab.uuid || crypto.randomUUID()
+          );
+          if (createdId !== undefined) {
+            tabsToHide.push(createdId);
+          }
+        }
+      }
+
+      if (tabsToHide.length > 0) {
+        try {
+          await browser.tabs.hide(tabsToHide);
+        } catch (err) {
+          console.warn('[WorkspaceManager] Failed to hide merged tabs:', err);
+        }
+      }
+
+      await this.saveStoredWorkspaces(newWorkspacesToStore);
     }
   }
 
