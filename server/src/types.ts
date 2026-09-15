@@ -11,10 +11,16 @@ export interface TabItem {
   index: number;
 }
 
+export type WorkspaceCustomType = 'emoji' | 'text' | 'color' | 'default';
+
 export interface Workspace {
   id: string;
   name: string;
   tabs: TabItem[];
+  customType?: WorkspaceCustomType;
+  customValue?: string;
+  color?: string;
+  icon?: string;
 }
 
 export interface SyncPayload {

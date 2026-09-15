@@ -524,5 +524,59 @@ describe('SynapseTab Reconcile & Diff Engine (reconcile)', () => {
     const plan = reconcile(localState, remoteState);
     expect(plan.activeWorkspaceId).toBe('work');
   });
+
+  it('Scenario 11: Propagates workspace visual customizations (emoji, text tag, color box)', () => {
+    const localState: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'default',
+      workspaces: [{ id: 'default', name: 'Main', tabs: [] }],
+    };
+
+    const remoteState: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'default', name: 'Main', tabs: [] },
+        {
+          id: 'dev-ws',
+          name: 'Development',
+          customType: 'emoji',
+          customValue: '🚀',
+          color: '#d0bcff',
+          icon: '🚀',
+          tabs: [],
+        },
+        {
+          id: 'tag-ws',
+          name: 'Research',
+          customType: 'text',
+          customValue: 'RES',
+          color: '#7cd1ff',
+          tabs: [],
+        },
+      ],
+    };
+
+    const plan = reconcile(localState, remoteState);
+    expect(plan.workspacesToCreate).toHaveLength(2);
+    expect(plan.workspacesToCreate[0]).toEqual({
+      id: 'dev-ws',
+      name: 'Development',
+      customType: 'emoji',
+      customValue: '🚀',
+      color: '#d0bcff',
+      icon: '🚀',
+    });
+    expect(plan.workspacesToCreate[1]).toEqual({
+      id: 'tag-ws',
+      name: 'Research',
+      customType: 'text',
+      customValue: 'RES',
+      color: '#7cd1ff',
+      icon: undefined,
+    });
+  });
 });
 

@@ -12,10 +12,16 @@ export interface TabItem {
   localTabId?: number;
 }
 
+export type WorkspaceCustomType = 'emoji' | 'text' | 'color' | 'default';
+
 export interface Workspace {
   id: string;
   name: string;
   tabs: TabItem[];
+  customType?: WorkspaceCustomType;
+  customValue?: string;
+  color?: string;
+  icon?: string;
 }
 
 export interface SyncPayload {
@@ -37,7 +43,14 @@ export interface ReconcilePlan {
     workspaceId?: string;
   }>;
   tabsToMove: Array<{ uuid: string; localTabId?: number; targetIndex: number }>;
-  workspacesToCreate: Array<{ id: string; name: string }>;
+  workspacesToCreate: Array<{
+    id: string;
+    name: string;
+    customType?: WorkspaceCustomType;
+    customValue?: string;
+    color?: string;
+    icon?: string;
+  }>;
   workspacesToRemove: Array<{ id: string }>;
   activeWorkspaceId: string;
 }
