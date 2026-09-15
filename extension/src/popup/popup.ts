@@ -7,16 +7,20 @@ import {
   BackupConfig,
   BackupListResponse,
 } from '../types.js';
+import { importFromStgFormat, StgImportResult } from '../stg-adapter.js';
 
 let currentWorkspaces: Workspace[] = [];
 let activeWorkspaceId = 'default';
 let currentSettings: SynapseSettings;
+let loadedStgResult: StgImportResult | null = null;
+let rawImportedJson: any = null;
 
-// DOM Elements
+// DOM Elements - Header & Global
 const statusBadge = document.getElementById('statusBadge') as HTMLElement;
 const statusLabel = document.getElementById('statusLabel') as HTMLElement;
 const syncNowBtn = document.getElementById('syncNowBtn') as HTMLButtonElement;
 const toggleBackupsBtn = document.getElementById('toggleBackupsBtn') as HTMLButtonElement;
+const toggleImportExportBtn = document.getElementById('toggleImportExportBtn') as HTMLButtonElement;
 const toggleSettingsBtn = document.getElementById('toggleSettingsBtn') as HTMLButtonElement;
 const settingsDrawer = document.getElementById('settingsDrawer') as HTMLElement;
 const saveSettingsBtn = document.getElementById('saveSettingsBtn') as HTMLButtonElement;
@@ -25,7 +29,9 @@ const lastSyncedText = document.getElementById('lastSyncedText') as HTMLElement;
 // Main sections
 const workspacesSection = document.getElementById('workspacesSection') as HTMLElement;
 const backupsSection = document.getElementById('backupsSection') as HTMLElement;
+const importExportSection = document.getElementById('importExportSection') as HTMLElement;
 const backToWorkspacesBtn = document.getElementById('backToWorkspacesBtn') as HTMLButtonElement;
+const backFromImportExportBtn = document.getElementById('backFromImportExportBtn') as HTMLButtonElement;
 
 // Settings inputs
 const settingBackendUrl = document.getElementById('settingBackendUrl') as HTMLInputElement;
@@ -40,6 +46,10 @@ const newWorkspaceRow = document.getElementById('newWorkspaceRow') as HTMLElemen
 const newWorkspaceInput = document.getElementById('newWorkspaceInput') as HTMLInputElement;
 const confirmAddWsBtn = document.getElementById('confirmAddWsBtn') as HTMLButtonElement;
 const cancelAddWsBtn = document.getElementById('cancelAddWsBtn') as HTMLButtonElement;
+
+const pinnedSectionWrapper = document.getElementById('pinnedSectionWrapper') as HTMLElement;
+const pinnedCountBadge = document.getElementById('pinnedCountBadge') as HTMLElement;
+const pinnedTabsList = document.getElementById('pinnedTabsList') as HTMLElement;
 
 const activeWorkspaceTitle = document.getElementById('activeWorkspaceTitle') as HTMLElement;
 const tabCountBadge = document.getElementById('tabCountBadge') as HTMLElement;
@@ -59,6 +69,28 @@ const closeExplorerBtn = document.getElementById('closeExplorerBtn') as HTMLButt
 const explorerSnapshotName = document.getElementById('explorerSnapshotName') as HTMLElement;
 const explorerSnapshotDate = document.getElementById('explorerSnapshotDate') as HTMLElement;
 const explorerContent = document.getElementById('explorerContent') as HTMLElement;
+
+// Import / Export elements
+const exportStgBtn = document.getElementById('exportStgBtn') as HTMLButtonElement;
+const exportBadge = document.getElementById('exportBadge') as HTMLElement;
+const openTabBtn = document.getElementById('openTabBtn') as HTMLButtonElement | null;
+const openImportInTabBtn = document.getElementById('openImportInTabBtn') as HTMLButtonElement | null;
+const stgFileInput = document.getElementById('stgFileInput') as HTMLInputElement;
+const stgDropZone = document.getElementById('stgDropZone') as HTMLElement;
+const dropZoneText = document.getElementById('dropZoneText') as HTMLElement;
+const importPreviewCard = document.getElementById('importPreviewCard') as HTMLElement;
+const previewFileName = document.getElementById('previewFileName') as HTMLElement;
+const previewVersionBadge = document.getElementById('previewVersionBadge') as HTMLElement;
+const previewWsCount = document.getElementById('previewWsCount') as HTMLElement;
+const previewPinnedCount = document.getElementById('previewPinnedCount') as HTMLElement;
+const previewTabsCount = document.getElementById('previewTabsCount') as HTMLElement;
+const previewGroupsChips = document.getElementById('previewGroupsChips') as HTMLElement;
+const executeImportBtn = document.getElementById('executeImportBtn') as HTMLButtonElement;
+const importFeedbackMsg = document.getElementById('importFeedbackMsg') as HTMLElement;
+
+// Paste JSON elements
+const pasteJsonInput = document.getElementById('pasteJsonInput') as HTMLTextAreaElement;
+const parsePastedJsonBtn = document.getElementById('parsePastedJsonBtn') as HTMLButtonElement;
 
 /**
  * Updates the sync status badge in the header.
@@ -116,7 +148,7 @@ async function loadAndDisplaySettings(): Promise<void> {
 }
 
 /**
- * Queries the state and updates workspaces and tabs UI.
+ * Queries the state and updates workspaces, tabs, and pinned tabs UI.
  */
 async function refreshState(): Promise<void> {
   const data = await browser.storage.local.get(['workspaces', 'active_workspace_id', 'sync_status']);
@@ -131,7 +163,11 @@ async function refreshState(): Promise<void> {
   // Get current tabs in window
   const tabs = await browser.tabs.query({ currentWindow: true });
 
-  // Map tabs to workspaces
+  // Pinned tabs handling
+  const pinnedTabs = tabs.filter((t) => t.pinned);
+  renderPinnedTabs(pinnedTabs);
+
+  // Map tabs to workspaces (excluding pinned tabs from regular count)
   const wsMap = new Map<string, any[]>();
   for (const ws of storedWorkspaces) {
     wsMap.set(ws.id, []);
@@ -152,7 +188,10 @@ async function refreshState(): Promise<void> {
     if (!wsMap.has(wsId)) {
       wsMap.set(wsId, []);
     }
-    wsMap.get(wsId)!.push(tab);
+    // Only add unpinned tabs to workspace tab bucket
+    if (!tab.pinned) {
+      wsMap.get(wsId)!.push(tab);
+    }
   }
 
   currentWorkspaces = storedWorkspaces.map((w) => ({
@@ -163,6 +202,85 @@ async function refreshState(): Promise<void> {
 
   renderWorkspaces();
   renderTabs();
+
+  // Update export badge overview
+  let totalTabs = pinnedTabs.length;
+  for (const ws of currentWorkspaces) {
+    totalTabs += ws.tabs.length;
+  }
+  exportBadge.textContent = `${currentWorkspaces.length} ws • ${totalTabs} tabs`;
+}
+
+/**
+ * Renders pinned tabs list (global across all workspaces).
+ */
+function renderPinnedTabs(pinnedTabs: any[]): void {
+  if (pinnedTabs.length === 0) {
+    pinnedSectionWrapper.classList.add('hidden');
+    return;
+  }
+
+  pinnedSectionWrapper.classList.remove('hidden');
+  pinnedCountBadge.textContent = `${pinnedTabs.length} pinned`;
+  pinnedTabsList.innerHTML = '';
+
+  for (const tab of pinnedTabs) {
+    const row = document.createElement('div');
+    row.className = 'tab-row';
+
+    const main = document.createElement('div');
+    main.className = 'tab-row-main';
+    main.style.cursor = 'pointer';
+
+    const icon = document.createElement('img');
+    icon.className = 'tab-icon';
+    icon.src =
+      tab.favIconUrl ||
+      'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2338bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+    icon.onerror = () => {
+      icon.src =
+        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2338bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+    };
+
+    const title = document.createElement('span');
+    title.className = 'tab-title';
+    title.textContent = tab.title || tab.url || 'Pinned Tab';
+    title.title = tab.url || '';
+
+    main.appendChild(icon);
+    main.appendChild(title);
+
+    // Switch to tab on click
+    main.addEventListener('click', async () => {
+      if (tab.id !== undefined) {
+        await browser.tabs.update(tab.id, { active: true });
+      }
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'tab-actions';
+
+    // Unpin button
+    const unpinBtn = document.createElement('button');
+    unpinBtn.className = 'tab-pin-btn pinned';
+    unpinBtn.title = 'Unpin tab';
+    unpinBtn.innerHTML = '📌';
+    unpinBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (tab.id !== undefined) {
+        await browser.runtime.sendMessage({
+          type: 'TOGGLE_PIN_TAB',
+          tabId: tab.id,
+        });
+        await refreshState();
+      }
+    });
+
+    actions.appendChild(unpinBtn);
+    row.appendChild(main);
+    row.appendChild(actions);
+    pinnedTabsList.appendChild(row);
+  }
 }
 
 /**
@@ -208,7 +326,7 @@ function renderWorkspaces(): void {
       deleteBtn.title = 'Delete workspace';
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm(`Delete workspace "${ws.name}"? Tabs will be reassigned.`)) {
+        if (confirm(`Delete workspace "${ws.name}"? All tabs in this workspace will be closed.`)) {
           await browser.runtime.sendMessage({
             type: 'DELETE_WORKSPACE',
             workspaceId: ws.id,
@@ -264,12 +382,16 @@ function renderTabs(): void {
 
     const main = document.createElement('div');
     main.className = 'tab-row-main';
+    main.style.cursor = 'pointer';
 
     const icon = document.createElement('img');
     icon.className = 'tab-icon';
-    icon.src = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+    icon.src =
+      tab.favIconUrl ||
+      'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
     icon.onerror = () => {
-      icon.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+      icon.src =
+        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
     };
 
     const title = document.createElement('span');
@@ -280,10 +402,36 @@ function renderTabs(): void {
     main.appendChild(icon);
     main.appendChild(title);
 
-    // Tab actions: Move to other workspace selector
+    // Switch to tab on click
+    main.addEventListener('click', async () => {
+      const tabId = tab.localTabId || (tab as any).id;
+      if (tabId !== undefined) {
+        await browser.tabs.update(tabId, { active: true });
+      }
+    });
+
     const actions = document.createElement('div');
     actions.className = 'tab-actions';
 
+    // Pin tab button
+    const pinBtn = document.createElement('button');
+    pinBtn.className = `tab-pin-btn ${tab.pinned ? 'pinned' : ''}`;
+    pinBtn.title = tab.pinned ? 'Unpin tab' : 'Pin tab (global)';
+    pinBtn.innerHTML = '📌';
+    pinBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const tabId = tab.localTabId || (tab as any).id;
+      if (tabId !== undefined) {
+        await browser.runtime.sendMessage({
+          type: 'TOGGLE_PIN_TAB',
+          tabId,
+        });
+        await refreshState();
+      }
+    });
+    actions.appendChild(pinBtn);
+
+    // Move to other workspace selector
     if (currentWorkspaces.length > 1) {
       const select = document.createElement('select');
       select.className = 'ws-select';
@@ -416,7 +564,6 @@ async function loadAndRenderBackups(): Promise<void> {
               type: 'RESTORE_BACKUP',
               backupId: bk.id,
             });
-            // Switch back to workspaces view
             backToWorkspacesBtn.click();
           } catch (err: any) {
             alert(`Restore failed: ${err.message}`);
@@ -536,21 +683,94 @@ async function exploreBackup(backupId: string): Promise<void> {
   }
 }
 
+/**
+ * Common processor for parsed JSON content (from file or paste).
+ */
+function processJsonContent(content: string, sourceName: string = 'backup.json'): void {
+  importFeedbackMsg.className = 'import-feedback hidden';
+  dropZoneText.textContent = sourceName;
+
+  try {
+    rawImportedJson = JSON.parse(content);
+    loadedStgResult = importFromStgFormat(rawImportedJson);
+
+    previewFileName.textContent = sourceName;
+    previewVersionBadge.textContent = `STG ${loadedStgResult.version}`;
+    previewWsCount.textContent = `${loadedStgResult.groupCount} workspace${loadedStgResult.groupCount === 1 ? '' : 's'}`;
+    previewPinnedCount.textContent = `${loadedStgResult.pinnedCount} pinned`;
+    previewTabsCount.textContent = `${loadedStgResult.tabCount} total tabs`;
+
+    // Render group chips
+    previewGroupsChips.innerHTML = '';
+    for (const ws of loadedStgResult.workspaces) {
+      const chip = document.createElement('span');
+      chip.className = 'group-chip';
+      chip.textContent = ws.name;
+
+      const tabsCountSpan = document.createElement('span');
+      tabsCountSpan.className = 'group-chip-tabs';
+      tabsCountSpan.textContent = `(${ws.tabs.length})`;
+      chip.appendChild(tabsCountSpan);
+
+      previewGroupsChips.appendChild(chip);
+    }
+
+    importPreviewCard.classList.remove('hidden');
+  } catch (err: any) {
+    loadedStgResult = null;
+    rawImportedJson = null;
+    importPreviewCard.classList.add('hidden');
+    importFeedbackMsg.className = 'import-feedback error';
+    importFeedbackMsg.textContent = `Error parsing file: ${err.message}`;
+    importFeedbackMsg.classList.remove('hidden');
+  }
+}
+
+/**
+ * Parses selected STG / SynapseTab JSON file and populates the preview card.
+ */
+async function handleFileSelected(file: File): Promise<void> {
+  try {
+    const content = await file.text();
+    processJsonContent(content, file.name);
+  } catch (err: any) {
+    importFeedbackMsg.className = 'import-feedback error';
+    importFeedbackMsg.textContent = `Failed to read file: ${err.message}`;
+    importFeedbackMsg.classList.remove('hidden');
+  }
+}
+
 // Navigation Event Listeners
 toggleBackupsBtn.addEventListener('click', async () => {
   settingsDrawer.classList.add('hidden');
+  importExportSection.classList.add('hidden');
   const isBackupsVisible = !backupsSection.classList.contains('hidden');
 
   if (isBackupsVisible) {
-    // Switch to workspaces
     backupsSection.classList.add('hidden');
     workspacesSection.classList.remove('hidden');
     await refreshState();
   } else {
-    // Switch to backups
     workspacesSection.classList.add('hidden');
     backupsSection.classList.remove('hidden');
     await loadAndRenderBackups();
+  }
+});
+
+toggleImportExportBtn.addEventListener('click', async () => {
+  settingsDrawer.classList.add('hidden');
+  backupsSection.classList.add('hidden');
+  backupExplorer.classList.add('hidden');
+  const isImportExportVisible = !importExportSection.classList.contains('hidden');
+
+  if (isImportExportVisible) {
+    importExportSection.classList.add('hidden');
+    workspacesSection.classList.remove('hidden');
+    await refreshState();
+  } else {
+    workspacesSection.classList.add('hidden');
+    importExportSection.classList.remove('hidden');
+    await refreshState();
   }
 });
 
@@ -561,8 +781,193 @@ backToWorkspacesBtn.addEventListener('click', async () => {
   await refreshState();
 });
 
+backFromImportExportBtn.addEventListener('click', async () => {
+  importExportSection.classList.add('hidden');
+  workspacesSection.classList.remove('hidden');
+  await refreshState();
+});
+
 closeExplorerBtn.addEventListener('click', () => {
   backupExplorer.classList.add('hidden');
+});
+
+// Export STG JSON Action
+exportStgBtn.addEventListener('click', async () => {
+  exportStgBtn.disabled = true;
+  exportStgBtn.textContent = 'Generating export...';
+
+  try {
+    const stgData = await browser.runtime.sendMessage({ type: 'EXPORT_STG' });
+    const jsonStr = JSON.stringify(stgData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+    const filename = `synapsetab-stg-backup-${dateStr}_${timeStr}.json`;
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+
+    exportBadge.textContent = 'Downloaded!';
+    setTimeout(() => {
+      exportBadge.textContent = 'Ready';
+    }, 3000);
+  } catch (err: any) {
+    alert(`Export failed: ${err.message}`);
+  } finally {
+    exportStgBtn.disabled = false;
+    exportStgBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Export JSON File
+    `;
+  }
+});
+
+// Open Dedicated Tab Full Window Button
+openTabBtn?.addEventListener('click', async () => {
+  let section = 'workspaces';
+  if (!importExportSection.classList.contains('hidden')) section = 'import';
+  if (!backupsSection.classList.contains('hidden')) section = 'backups';
+  await browser.tabs.create({
+    url: browser.runtime.getURL(`popup/index.html?mode=tab&section=${section}`)
+  });
+  window.close();
+});
+
+// Open Importer in Dedicated Tab Button
+openImportInTabBtn?.addEventListener('click', async () => {
+  await browser.tabs.create({
+    url: browser.runtime.getURL('popup/index.html?mode=tab&section=import')
+  });
+  window.close();
+});
+
+// Import STG File Input & Drag and Drop
+stgFileInput.addEventListener('change', (e) => {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    handleFileSelected(target.files[0]);
+    target.value = ''; // Reset so choosing the same file re-triggers change
+  }
+});
+
+// Drop zone click: if inside popup mode, open dedicated tab so file dialog doesn't close popup
+stgDropZone.addEventListener('click', async (e) => {
+  if (!document.body.classList.contains('tab-mode')) {
+    e.preventDefault();
+    await browser.tabs.create({
+      url: browser.runtime.getURL('popup/index.html?mode=tab&section=import')
+    });
+    window.close();
+  }
+});
+
+stgDropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  stgDropZone.classList.add('dragover');
+});
+
+stgDropZone.addEventListener('dragleave', () => {
+  stgDropZone.classList.remove('dragover');
+});
+
+stgDropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  stgDropZone.classList.remove('dragover');
+  if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+    handleFileSelected(e.dataTransfer.files[0]);
+  } else if (e.dataTransfer) {
+    const text = e.dataTransfer.getData('text');
+    if (text) {
+      processJsonContent(text, 'dropped-data.json');
+    }
+  }
+});
+
+// Paste JSON Actions (live typing and paste handling)
+pasteJsonInput.addEventListener('input', () => {
+  const text = pasteJsonInput.value.trim();
+  if (text && (text.startsWith('{') || text.startsWith('['))) {
+    processJsonContent(text, 'pasted-content.json');
+  }
+});
+
+pasteJsonInput.addEventListener('paste', () => {
+  setTimeout(() => {
+    const text = pasteJsonInput.value.trim();
+    if (text && (text.startsWith('{') || text.startsWith('['))) {
+      processJsonContent(text, 'pasted-content.json');
+    }
+  }, 50);
+});
+
+parsePastedJsonBtn.addEventListener('click', () => {
+  const text = pasteJsonInput.value.trim();
+  if (!text) {
+    importFeedbackMsg.className = 'import-feedback error';
+    importFeedbackMsg.textContent = 'Please paste valid JSON text into the box.';
+    importFeedbackMsg.classList.remove('hidden');
+    return;
+  }
+  processJsonContent(text, 'pasted-content.json');
+});
+
+// Execute Import
+executeImportBtn.addEventListener('click', async () => {
+  if (!rawImportedJson || !loadedStgResult) return;
+
+  const modeRadio = document.querySelector('input[name="importMode"]:checked') as HTMLInputElement;
+  const mode = (modeRadio ? modeRadio.value : 'replace') as 'replace' | 'merge';
+
+  const confirmMsg =
+    mode === 'replace'
+      ? `Replace all current workspaces with ${loadedStgResult.groupCount} workspaces and ${loadedStgResult.pinnedCount} pinned tabs?`
+      : `Merge ${loadedStgResult.groupCount} workspaces and ${loadedStgResult.pinnedCount} pinned tabs into your current setup?`;
+
+  if (!confirm(confirmMsg)) return;
+
+  executeImportBtn.disabled = true;
+  executeImportBtn.textContent = 'Importing tabs & workspaces...';
+
+  try {
+    const res = await browser.runtime.sendMessage({
+      type: 'IMPORT_STG',
+      stgData: rawImportedJson,
+      mode,
+    });
+
+    if (res.error) {
+      throw new Error(res.error);
+    }
+
+    importFeedbackMsg.className = 'import-feedback success';
+    importFeedbackMsg.textContent = `Successfully imported ${res.workspacesCount} workspaces and ${res.pinnedCount} pinned tabs!`;
+    importFeedbackMsg.classList.remove('hidden');
+
+    setTimeout(async () => {
+      importExportSection.classList.add('hidden');
+      workspacesSection.classList.remove('hidden');
+      await refreshState();
+    }, 1200);
+  } catch (err: any) {
+    importFeedbackMsg.className = 'import-feedback error';
+    importFeedbackMsg.textContent = `Import failed: ${err.message}`;
+    importFeedbackMsg.classList.remove('hidden');
+  } finally {
+    executeImportBtn.disabled = false;
+    executeImportBtn.textContent = '🚀 Import into SynapseTab';
+  }
 });
 
 createBackupBtn.addEventListener('click', async () => {
@@ -676,7 +1081,24 @@ newWorkspaceInput.addEventListener('keydown', (e) => {
 
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isTab = urlParams.get('mode') === 'tab' || !window.location.href.startsWith('moz-extension://') || window.innerWidth > 500;
+  if (isTab) {
+    document.body.classList.add('tab-mode');
+  }
+
+  const section = urlParams.get('section');
+  if (section === 'import') {
+    workspacesSection.classList.add('hidden');
+    backupsSection.classList.add('hidden');
+    importExportSection.classList.remove('hidden');
+  } else if (section === 'backups') {
+    workspacesSection.classList.add('hidden');
+    importExportSection.classList.add('hidden');
+    backupsSection.classList.remove('hidden');
+    await loadAndRenderBackups();
+  }
+
   await loadAndDisplaySettings();
   await refreshState();
 });
-
