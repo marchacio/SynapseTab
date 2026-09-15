@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SynapseTab Workspaces</title>
+  <title>SynapseTab</title>
   <link rel="stylesheet" href="./popup.css">
 </head>
 <body>
-  <div class="container">
+  <div class="app-container">
     <!-- Header -->
     <header class="header">
       <div class="brand">
@@ -27,290 +27,304 @@
       </div>
 
       <div class="header-actions">
-        <button id="syncNowBtn" class="icon-button" title="Synchronize with remote">
+        <button id="syncNowBtn" class="icon-button" title="Synchronize Now">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"></polyline>
             <polyline points="1 20 1 14 7 14"></polyline>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
           </svg>
         </button>
-        <button id="toggleBackupsBtn" class="icon-button" title="Server Backups">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-          </svg>
-        </button>
-        <button id="toggleImportExportBtn" class="icon-button" title="Import / Export">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-        </button>
-        <button id="toggleSettingsBtn" class="icon-button" title="Settings">
+        <button id="settingsBtn" class="icon-button" title="Open Settings & Manager">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
-        <button id="openTabBtn" class="icon-button" title="Open in Dedicated Tab (Full Window)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
         </button>
       </div>
     </header>
 
-    <!-- Settings Drawer (Collapsible) -->
-    <div id="settingsDrawer" class="settings-drawer hidden">
-      <div class="drawer-header">
-        <h2>Sync Configuration</h2>
-      </div>
-      <div class="form-group">
-        <label for="settingBackendUrl">Backend Server URL</label>
-        <input type="url" id="settingBackendUrl" placeholder="http://localhost:8080">
-      </div>
-      <div class="form-group">
-        <label for="settingSyncSecret">Sync Secret Token</label>
-        <input type="password" id="settingSyncSecret" placeholder="Pre-shared token">
-      </div>
-      <div class="form-group">
-        <label for="settingUserId">User ID</label>
-        <input type="text" id="settingUserId" placeholder="default">
-      </div>
-      <div class="form-group">
-        <label for="settingClientId">Client Identifier</label>
-        <input type="text" id="settingClientId" placeholder="e.g. laptop-firefox-01">
-      </div>
-      <button id="saveSettingsBtn" class="btn btn-primary btn-block">Save Configuration</button>
-    </div>
-
-    <!-- Workspaces & Tabs Main View -->
-    <main id="workspacesSection" class="main-content">
-      <!-- Active Workspaces List -->
-      <div class="section-title">
-        <h2>Workspaces</h2>
-        <button id="addWorkspaceBtn" class="btn btn-sm btn-secondary">+ New</button>
-      </div>
-
-      <div class="workspaces-list" id="workspacesList">
-        <!-- Workspaces rendered dynamically -->
-      </div>
-
-      <div class="new-workspace-row hidden" id="newWorkspaceRow">
-        <input type="text" id="newWorkspaceInput" placeholder="Workspace name..." maxlength="32">
-        <button id="confirmAddWsBtn" class="btn btn-sm btn-primary">Add</button>
-        <button id="cancelAddWsBtn" class="btn btn-sm btn-ghost">&times;</button>
-      </div>
-
-      <!-- Pinned Tabs Section (Global across all workspaces) -->
-      <div class="pinned-section-wrapper hidden" id="pinnedSectionWrapper">
-        <div class="section-title pinned-section-header">
-          <h2>📌 Pinned Tabs (Global)</h2>
-          <span class="badge badge-pinned" id="pinnedCountBadge">0</span>
-        </div>
-        <div class="tabs-list pinned-tabs-list" id="pinnedTabsList">
-          <!-- Pinned tabs rendered dynamically -->
-        </div>
-      </div>
-
-      <!-- Tabs List for Active Workspace -->
-      <div class="section-title" style="margin-top: 14px;">
-        <h2 id="activeWorkspaceTitle">Tabs in Current Workspace</h2>
-        <span class="badge" id="tabCountBadge">0</span>
-      </div>
-
-      <div class="tabs-list" id="tabsList">
-        <!-- Tabs rendered dynamically -->
-      </div>
-    </main>
-
-    <!-- Import / Export Section (STG Compatible) -->
-    <main id="importExportSection" class="main-content hidden">
-      <div class="section-title">
-        <div class="title-with-back">
-          <button id="backFromImportExportBtn" class="btn btn-sm btn-ghost" title="Back to Workspaces">
-            &larr; Back
-          </button>
-          <h2>Import & Export</h2>
-        </div>
-      </div>
-
-      <!-- Export Card -->
-      <div class="feature-card">
-        <div class="card-header">
-          <div class="card-header-title">
-            <span class="card-icon">📤</span>
-            <span class="card-title">Export Simple Tab Groups JSON</span>
-          </div>
-          <span class="badge" id="exportBadge">Ready</span>
-        </div>
-        <p class="card-desc">
-          Download all workspaces, tab lists, and pinned tabs in standard <strong>Simple Tab Groups v5.3.2</strong> compatible format.
-        </p>
-        <div class="card-actions">
-          <button id="exportStgBtn" class="btn btn-primary btn-block">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Export JSON File
-          </button>
-        </div>
-      </div>
-
-      <!-- Import Card -->
-      <div class="feature-card">
-        <div class="card-header">
-          <div class="card-header-title">
-            <span class="card-icon">📥</span>
-            <span class="card-title">Import Simple Tab Groups JSON</span>
-          </div>
-        </div>
-        <p class="card-desc">
-          Select or paste a <code>.json</code> export from Drive4ik's Simple Tab Groups or SynapseTab to import your workspaces and tabs.
-        </p>
-
-        <!-- Dedicated Tab Importer Shortcut (Solves Firefox popup file picker blur limitation) -->
-        <div id="tabImporterBanner" class="tab-importer-banner">
-          <button id="openImportInTabBtn" class="btn btn-secondary btn-block" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-            Choose File in Dedicated Tab
-          </button>
-          <div class="banner-hint">Recommended for file selection (dialogs never auto-close)</div>
-        </div>
-
-        <!-- Drop Zone / File Picker as native label -->
-        <label for="stgFileInput" id="stgDropZone" class="file-drop-zone">
-          <input type="file" id="stgFileInput" accept=".json,application/json" class="file-input-hidden">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="12" y1="18" x2="12" y2="12"></line>
-            <line x1="9" y1="15" x2="15" y2="15"></line>
+    <!-- Main Layout: Sidebar Navigation (in Full Page Mode) + Content -->
+    <div class="layout-body">
+      <!-- Sidebar Navigation (Active in Full Page / Tab View) -->
+      <nav id="fullPageNav" class="sidebar-nav">
+        <button id="navWorkspaces" class="nav-item active" data-section="workspaces">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"></path>
           </svg>
-          <span class="drop-text" id="dropZoneText">Click to select or drop JSON file</span>
-        </label>
+          <span>Workspaces</span>
+        </button>
+        <button id="navBackups" class="nav-item" data-section="backups">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+          <span>Server Backups</span>
+        </button>
+        <button id="navImportExport" class="nav-item" data-section="importExport">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Import & Export</span>
+        </button>
+        <button id="navSettings" class="nav-item" data-section="settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>Sync Settings</span>
+        </button>
+      </nav>
 
-        <!-- Paste JSON Section (Always accessible) -->
-        <div class="paste-json-section">
-          <div class="paste-section-header">
-            <label for="pasteJsonInput"><strong>📋 Or Paste JSON Text Directly:</strong></label>
-          </div>
-          <textarea id="pasteJsonInput" class="styled-textarea" rows="4" placeholder="Paste entire STG JSON backup content here (e.g. Ctrl+V)..."></textarea>
-          <button id="parsePastedJsonBtn" class="btn btn-sm btn-secondary btn-block" type="button" style="margin-top: 6px;">Parse Pasted JSON</button>
-        </div>
-
-        <!-- Import Preview Box (shown after valid file parsed) -->
-        <div id="importPreviewCard" class="import-preview-box hidden">
-          <div class="preview-header">
-            <span class="preview-filename" id="previewFileName">backup.json</span>
-            <span class="badge" id="previewVersionBadge">STG 5.3.2</span>
-          </div>
-          <div class="preview-stats">
-            <span id="previewWsCount">0 workspaces</span> • 
-            <span id="previewPinnedCount">0 pinned</span> • 
-            <span id="previewTabsCount">0 total tabs</span>
-          </div>
-          <div class="groups-chips-list" id="previewGroupsChips">
-            <!-- Rendered dynamically -->
+      <!-- Main Content Container -->
+      <div class="content-viewport">
+        <!-- 1. Workspaces & Tabs Section -->
+        <main id="workspacesSection" class="main-content">
+          <div class="section-title">
+            <h2>Workspaces</h2>
+            <button id="addWorkspaceBtn" class="btn btn-sm btn-secondary">+ New</button>
           </div>
 
-          <!-- Import Mode Selector -->
-          <div class="import-mode-select">
-            <span class="mode-label">Import Strategy:</span>
-            <div class="mode-options">
-              <label class="radio-label">
-                <input type="radio" name="importMode" value="replace" checked>
-                <span><strong>Replace</strong> (Clear current & load file)</span>
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="importMode" value="merge">
-                <span><strong>Merge</strong> (Append to existing workspaces)</span>
-              </label>
+          <div class="workspaces-list" id="workspacesList">
+            <!-- Workspaces rendered dynamically -->
+          </div>
+
+          <div class="new-workspace-row hidden" id="newWorkspaceRow">
+            <input type="text" id="newWorkspaceInput" placeholder="Workspace name..." maxlength="32">
+            <button id="confirmAddWsBtn" class="btn btn-sm btn-primary">Add</button>
+            <button id="cancelAddWsBtn" class="btn btn-sm btn-ghost">&times;</button>
+          </div>
+
+          <!-- Pinned Tabs Section (Global across all workspaces) -->
+          <div class="pinned-section-wrapper hidden" id="pinnedSectionWrapper">
+            <div class="section-title pinned-section-header">
+              <h2>📌 Pinned Tabs (Global)</h2>
+              <span class="badge badge-pinned" id="pinnedCountBadge">0</span>
+            </div>
+            <div class="tabs-list pinned-tabs-list" id="pinnedTabsList">
+              <!-- Pinned tabs rendered dynamically -->
             </div>
           </div>
 
-          <button id="executeImportBtn" class="btn btn-primary btn-block">
-            🚀 Import into SynapseTab
-          </button>
-        </div>
-
-        <!-- Status / Result Message -->
-        <div id="importFeedbackMsg" class="import-feedback hidden"></div>
-      </div>
-    </main>
-
-    <!-- Backups Management Section -->
-    <main id="backupsSection" class="main-content hidden">
-      <div class="section-title">
-        <div class="title-with-back">
-          <button id="backToWorkspacesBtn" class="btn btn-sm btn-ghost" title="Back to Workspaces">
-            &larr; Back
-          </button>
-          <h2>Server Backups</h2>
-        </div>
-        <button id="createBackupBtn" class="btn btn-sm btn-primary">+ Backup Now</button>
-      </div>
-
-      <!-- Backup Schedule Config Card -->
-      <div class="backup-config-card">
-        <div class="config-header">
-          <span class="config-title">Auto-Backup Policy</span>
-        </div>
-        <div class="config-grid">
-          <div class="form-group">
-            <label for="backupIntervalSelect">Frequency</label>
-            <select id="backupIntervalSelect" class="styled-select">
-              <option value="hourly">Hourly</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="disabled">Disabled</option>
-            </select>
+          <!-- Tabs List for Active Workspace -->
+          <div class="section-title" style="margin-top: 14px;">
+            <h2 id="activeWorkspaceTitle">Tabs in Current Workspace</h2>
+            <span class="badge" id="tabCountBadge">0</span>
           </div>
-          <div class="form-group">
-            <label for="backupRetentionInput">Max Copies</label>
-            <input type="number" id="backupRetentionInput" min="1" max="100" value="10" class="styled-input-num">
+
+          <div class="tabs-list" id="tabsList">
+            <!-- Tabs rendered dynamically -->
           </div>
-        </div>
-        <div class="config-actions">
-          <button id="saveBackupConfigBtn" class="btn btn-sm btn-secondary">Save Policy</button>
-        </div>
-      </div>
+        </main>
 
-      <!-- Backups List -->
-      <div class="section-subtitle">
-        <span>Stored Snapshots</span>
-        <span class="badge" id="backupsCountBadge">0 copies</span>
-      </div>
-
-      <div id="backupsList" class="backups-list">
-        <!-- Rendered dynamically -->
-      </div>
-
-      <!-- Backup Exploration Modal / Drawer -->
-      <div id="backupExplorer" class="backup-explorer hidden">
-        <div class="explorer-header">
-          <div class="explorer-title">
-            <span id="explorerSnapshotName">Snapshot Explorer</span>
-            <span id="explorerSnapshotDate" class="text-muted-xs"></span>
+        <!-- 2. Server Backups Management Section -->
+        <main id="backupsSection" class="main-content hidden">
+          <div class="section-title">
+            <h2>Server Backups</h2>
+            <button id="createBackupBtn" class="btn btn-sm btn-primary">+ Backup Now</button>
           </div>
-          <button id="closeExplorerBtn" class="btn btn-ghost btn-sm" title="Close preview">&times;</button>
-        </div>
-        <div id="explorerContent" class="explorer-content">
-          <!-- Rendered dynamically -->
-        </div>
+
+          <!-- Backup Schedule Config Card -->
+          <div class="feature-card">
+            <div class="card-header">
+              <div class="card-header-title">
+                <span class="card-icon">⏱️</span>
+                <span class="card-title">Auto-Backup Policy</span>
+              </div>
+            </div>
+            <div class="config-grid">
+              <div class="form-group">
+                <label for="backupIntervalSelect">Frequency</label>
+                <select id="backupIntervalSelect" class="styled-select">
+                  <option value="hourly">Hourly</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="backupRetentionInput">Max Retained Copies</label>
+                <input type="number" id="backupRetentionInput" min="1" max="100" value="10" class="styled-input-num">
+              </div>
+            </div>
+            <button id="saveBackupConfigBtn" class="btn btn-sm btn-secondary">Save Policy</button>
+          </div>
+
+          <!-- Stored Backups List -->
+          <div class="section-subtitle" style="margin-top: 14px;">
+            <span>Stored Snapshots</span>
+            <span class="badge" id="backupsCountBadge">0 copies</span>
+          </div>
+
+          <div id="backupsList" class="backups-list">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Backup Exploration Modal / Drawer -->
+          <div id="backupExplorer" class="backup-explorer hidden">
+            <div class="explorer-header">
+              <div class="explorer-title">
+                <span id="explorerSnapshotName">Snapshot Explorer</span>
+                <span id="explorerSnapshotDate" class="text-muted-xs"></span>
+              </div>
+              <button id="closeExplorerBtn" class="btn btn-ghost btn-sm" title="Close preview">&times;</button>
+            </div>
+            <div id="explorerContent" class="explorer-content">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </main>
+
+        <!-- 3. Import & Export Section (STG Compatible) -->
+        <main id="importExportSection" class="main-content hidden">
+          <div class="section-title">
+            <h2>Import & Export</h2>
+          </div>
+
+          <!-- Export Card -->
+          <div class="feature-card">
+            <div class="card-header">
+              <div class="card-header-title">
+                <span class="card-icon">📤</span>
+                <span class="card-title">Export Simple Tab Groups JSON</span>
+              </div>
+              <span class="badge" id="exportBadge">Ready</span>
+            </div>
+            <p class="card-desc">
+              Download all workspaces, tab lists, and pinned tabs in standard <strong>Simple Tab Groups v5.3.2</strong> compatible format.
+            </p>
+            <div class="card-actions">
+              <button id="exportStgBtn" class="btn btn-primary btn-block">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Export JSON File
+              </button>
+            </div>
+          </div>
+
+          <!-- Import Card -->
+          <div class="feature-card">
+            <div class="card-header">
+              <div class="card-header-title">
+                <span class="card-icon">📥</span>
+                <span class="card-title">Import Simple Tab Groups JSON</span>
+              </div>
+            </div>
+            <p class="card-desc">
+              Select or paste a <code>.json</code> export from Drive4ik's Simple Tab Groups or SynapseTab to import your workspaces and tabs.
+            </p>
+
+            <!-- Drop Zone / File Picker as native label -->
+            <label for="stgFileInput" id="stgDropZone" class="file-drop-zone">
+              <input type="file" id="stgFileInput" accept=".json,application/json" class="file-input-hidden">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+              <span class="drop-text" id="dropZoneText">Click to select or drop JSON file</span>
+            </label>
+
+            <!-- Paste JSON Section -->
+            <div class="paste-json-section">
+              <div class="paste-section-header">
+                <label for="pasteJsonInput"><strong>📋 Or Paste JSON Text Directly:</strong></label>
+              </div>
+              <textarea id="pasteJsonInput" class="styled-textarea" rows="4" placeholder="Paste entire STG JSON backup content here (e.g. Ctrl+V)..."></textarea>
+              <button id="parsePastedJsonBtn" class="btn btn-sm btn-secondary btn-block" type="button" style="margin-top: 6px;">Parse Pasted JSON</button>
+            </div>
+
+            <!-- Import Preview Box (shown after valid file parsed) -->
+            <div id="importPreviewCard" class="import-preview-box hidden">
+              <div class="preview-header">
+                <span class="preview-filename" id="previewFileName">backup.json</span>
+                <span class="badge" id="previewVersionBadge">STG 5.3.2</span>
+              </div>
+              <div class="preview-stats">
+                <span id="previewWsCount">0 workspaces</span> • 
+                <span id="previewPinnedCount">0 pinned</span> • 
+                <span id="previewTabsCount">0 total tabs</span>
+              </div>
+              <div class="groups-chips-list" id="previewGroupsChips">
+                <!-- Rendered dynamically -->
+              </div>
+
+              <!-- Import Mode Selector -->
+              <div class="import-mode-select">
+                <span class="mode-label">Import Strategy:</span>
+                <div class="mode-options">
+                  <label class="radio-label">
+                    <input type="radio" name="importMode" value="replace" checked>
+                    <span><strong>Replace</strong> (Clear current & load file)</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="importMode" value="merge">
+                    <span><strong>Merge</strong> (Append to existing workspaces)</span>
+                  </label>
+                </div>
+              </div>
+
+              <button id="executeImportBtn" class="btn btn-primary btn-block">
+                🚀 Import into SynapseTab
+              </button>
+            </div>
+
+            <!-- Status / Result Message -->
+            <div id="importFeedbackMsg" class="import-feedback hidden"></div>
+          </div>
+        </main>
+
+        <!-- 4. Sync Settings Section -->
+        <main id="settingsSection" class="main-content hidden">
+          <div class="section-title">
+            <h2>Sync Configuration</h2>
+          </div>
+
+          <div class="feature-card">
+            <div class="card-header">
+              <div class="card-header-title">
+                <span class="card-icon">⚡</span>
+                <span class="card-title">Server Connection</span>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="settingBackendUrl">Backend Server URL</label>
+              <input type="url" id="settingBackendUrl" placeholder="http://localhost:8080" class="styled-input">
+            </div>
+
+            <div class="form-group">
+              <label for="settingSyncSecret">Sync Secret Token</label>
+              <input type="password" id="settingSyncSecret" placeholder="Pre-shared token" class="styled-input">
+            </div>
+
+            <div class="form-group">
+              <label for="settingUserId">User ID (Cluster Partition)</label>
+              <input type="text" id="settingUserId" placeholder="default" class="styled-input">
+            </div>
+
+            <div class="form-group">
+              <label for="settingClientId">Client Identifier</label>
+              <input type="text" id="settingClientId" placeholder="e.g. laptop-firefox-01" class="styled-input">
+            </div>
+
+            <div class="card-actions" style="margin-top: 10px; display: flex; gap: 8px;">
+              <button id="saveSettingsBtn" class="btn btn-primary" style="flex: 1;">Save Configuration</button>
+              <button id="testConnectionBtn" class="btn btn-secondary" type="button">Test Connection</button>
+            </div>
+
+            <div id="settingsFeedbackMsg" class="import-feedback hidden" style="margin-top: 8px;"></div>
+          </div>
+        </main>
       </div>
-    </main>
+    </div>
 
     <!-- Footer -->
     <footer class="footer">

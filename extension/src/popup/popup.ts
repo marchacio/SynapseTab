@@ -19,25 +19,21 @@ let rawImportedJson: any = null;
 const statusBadge = document.getElementById('statusBadge') as HTMLElement;
 const statusLabel = document.getElementById('statusLabel') as HTMLElement;
 const syncNowBtn = document.getElementById('syncNowBtn') as HTMLButtonElement;
-const toggleBackupsBtn = document.getElementById('toggleBackupsBtn') as HTMLButtonElement;
-const toggleImportExportBtn = document.getElementById('toggleImportExportBtn') as HTMLButtonElement;
-const toggleSettingsBtn = document.getElementById('toggleSettingsBtn') as HTMLButtonElement;
-const settingsDrawer = document.getElementById('settingsDrawer') as HTMLElement;
-const saveSettingsBtn = document.getElementById('saveSettingsBtn') as HTMLButtonElement;
+const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const lastSyncedText = document.getElementById('lastSyncedText') as HTMLElement;
 
-// Main sections
+// Navigation
+const fullPageNav = document.getElementById('fullPageNav') as HTMLElement;
+const navWorkspaces = document.getElementById('navWorkspaces') as HTMLButtonElement;
+const navBackups = document.getElementById('navBackups') as HTMLButtonElement;
+const navImportExport = document.getElementById('navImportExport') as HTMLButtonElement;
+const navSettings = document.getElementById('navSettings') as HTMLButtonElement;
+
+// Main Sections
 const workspacesSection = document.getElementById('workspacesSection') as HTMLElement;
 const backupsSection = document.getElementById('backupsSection') as HTMLElement;
 const importExportSection = document.getElementById('importExportSection') as HTMLElement;
-const backToWorkspacesBtn = document.getElementById('backToWorkspacesBtn') as HTMLButtonElement;
-const backFromImportExportBtn = document.getElementById('backFromImportExportBtn') as HTMLButtonElement;
-
-// Settings inputs
-const settingBackendUrl = document.getElementById('settingBackendUrl') as HTMLInputElement;
-const settingSyncSecret = document.getElementById('settingSyncSecret') as HTMLInputElement;
-const settingUserId = document.getElementById('settingUserId') as HTMLInputElement;
-const settingClientId = document.getElementById('settingClientId') as HTMLInputElement;
+const settingsSection = document.getElementById('settingsSection') as HTMLElement;
 
 // Workspaces & Tabs containers
 const workspacesList = document.getElementById('workspacesList') as HTMLElement;
@@ -73,8 +69,6 @@ const explorerContent = document.getElementById('explorerContent') as HTMLElemen
 // Import / Export elements
 const exportStgBtn = document.getElementById('exportStgBtn') as HTMLButtonElement;
 const exportBadge = document.getElementById('exportBadge') as HTMLElement;
-const openTabBtn = document.getElementById('openTabBtn') as HTMLButtonElement | null;
-const openImportInTabBtn = document.getElementById('openImportInTabBtn') as HTMLButtonElement | null;
 const stgFileInput = document.getElementById('stgFileInput') as HTMLInputElement;
 const stgDropZone = document.getElementById('stgDropZone') as HTMLElement;
 const dropZoneText = document.getElementById('dropZoneText') as HTMLElement;
@@ -91,6 +85,15 @@ const importFeedbackMsg = document.getElementById('importFeedbackMsg') as HTMLEl
 // Paste JSON elements
 const pasteJsonInput = document.getElementById('pasteJsonInput') as HTMLTextAreaElement;
 const parsePastedJsonBtn = document.getElementById('parsePastedJsonBtn') as HTMLButtonElement;
+
+// Settings inputs
+const settingBackendUrl = document.getElementById('settingBackendUrl') as HTMLInputElement;
+const settingSyncSecret = document.getElementById('settingSyncSecret') as HTMLInputElement;
+const settingUserId = document.getElementById('settingUserId') as HTMLInputElement;
+const settingClientId = document.getElementById('settingClientId') as HTMLInputElement;
+const saveSettingsBtn = document.getElementById('saveSettingsBtn') as HTMLButtonElement;
+const testConnectionBtn = document.getElementById('testConnectionBtn') as HTMLButtonElement;
+const settingsFeedbackMsg = document.getElementById('settingsFeedbackMsg') as HTMLElement;
 
 /**
  * Updates the sync status badge in the header.
@@ -129,7 +132,44 @@ function renderSyncStatus(status: SyncStatus): void {
 }
 
 /**
- * Loads settings from storage and populates drawer inputs.
+ * Switches the active section in full-page mode.
+ */
+async function switchSection(section: 'workspaces' | 'backups' | 'importExport' | 'settings'): Promise<void> {
+  workspacesSection.classList.add('hidden');
+  backupsSection.classList.add('hidden');
+  importExportSection.classList.add('hidden');
+  settingsSection.classList.add('hidden');
+
+  navWorkspaces?.classList.remove('active');
+  navBackups?.classList.remove('active');
+  navImportExport?.classList.remove('active');
+  navSettings?.classList.remove('active');
+
+  switch (section) {
+    case 'workspaces':
+      workspacesSection.classList.remove('hidden');
+      navWorkspaces?.classList.add('active');
+      await refreshState();
+      break;
+    case 'backups':
+      backupsSection.classList.remove('hidden');
+      navBackups?.classList.add('active');
+      await loadAndRenderBackups();
+      break;
+    case 'importExport':
+      importExportSection.classList.remove('hidden');
+      navImportExport?.classList.add('active');
+      break;
+    case 'settings':
+      settingsSection.classList.remove('hidden');
+      navSettings?.classList.add('active');
+      await loadAndDisplaySettings();
+      break;
+  }
+}
+
+/**
+ * Loads settings from storage and populates inputs.
  */
 async function loadAndDisplaySettings(): Promise<void> {
   const data = await browser.storage.local.get('settings');
@@ -178,43 +218,55 @@ async function refreshState(): Promise<void> {
     let wsId = activeWorkspaceId;
     try {
       const storedWs = await browser.sessions.getTabValue(tab.id, 'workspace_id');
-      if (typeof storedWs === 'string' && storedWs.length > 0) {
+      if (typeof storedWs === 'string') {
         wsId = storedWs;
-      } else {
-        await browser.sessions.setTabValue(tab.id, 'workspace_id', activeWorkspaceId);
       }
-    } catch {}
-
-    if (!wsMap.has(wsId)) {
-      wsMap.set(wsId, []);
+    } catch {
+      // Ignored
     }
-    // Only add unpinned tabs to workspace tab bucket
+
     if (!tab.pinned) {
-      wsMap.get(wsId)!.push(tab);
+      const list = wsMap.get(wsId);
+      if (list) {
+        list.push(tab);
+      } else {
+        const defaultList = wsMap.get(storedWorkspaces[0]?.id || 'default');
+        defaultList?.push(tab);
+      }
     }
   }
 
-  currentWorkspaces = storedWorkspaces.map((w) => ({
-    id: w.id,
-    name: w.name,
-    tabs: wsMap.get(w.id) || [],
+  // Render Workspaces List
+  currentWorkspaces = storedWorkspaces.map((ws) => ({
+    id: ws.id,
+    name: ws.name,
+    tabs: (wsMap.get(ws.id) || []).map((t) => ({
+      uuid: '',
+      url: t.url || '',
+      title: t.title || '',
+      favIconUrl: t.favIconUrl || undefined,
+      pinned: t.pinned || false,
+      active: t.active || false,
+      localTabId: t.id,
+    })),
   }));
 
-  renderWorkspaces();
-  renderTabs();
+  renderWorkspacesList(currentWorkspaces, activeWorkspaceId);
 
-  // Update export badge overview
-  let totalTabs = pinnedTabs.length;
-  for (const ws of currentWorkspaces) {
-    totalTabs += ws.tabs.length;
-  }
-  exportBadge.textContent = `${currentWorkspaces.length} ws • ${totalTabs} tabs`;
+  // Render Active Workspace Tabs
+  const currentWs = currentWorkspaces.find((w) => w.id === activeWorkspaceId);
+  activeWorkspaceTitle.textContent = currentWs ? `Tabs in ${currentWs.name}` : 'Active Tabs';
+  const activeTabs = currentWs ? currentWs.tabs : [];
+  tabCountBadge.textContent = `${activeTabs.length} tab${activeTabs.length === 1 ? '' : 's'}`;
+  renderTabsList(activeTabs, currentWorkspaces);
 }
 
 /**
- * Renders pinned tabs list (global across all workspaces).
+ * Renders global pinned tabs.
  */
-function renderPinnedTabs(pinnedTabs: any[]): void {
+function renderPinnedTabs(pinnedTabs: browser.tabs.Tab[]): void {
+  pinnedTabsList.replaceChildren();
+
   if (pinnedTabs.length === 0) {
     pinnedSectionWrapper.classList.add('hidden');
     return;
@@ -222,38 +274,33 @@ function renderPinnedTabs(pinnedTabs: any[]): void {
 
   pinnedSectionWrapper.classList.remove('hidden');
   pinnedCountBadge.textContent = `${pinnedTabs.length} pinned`;
-  pinnedTabsList.innerHTML = '';
 
   for (const tab of pinnedTabs) {
     const row = document.createElement('div');
     row.className = 'tab-row';
 
-    const main = document.createElement('div');
-    main.className = 'tab-row-main';
-    main.style.cursor = 'pointer';
+    const info = document.createElement('div');
+    info.className = 'tab-info';
 
-    const icon = document.createElement('img');
-    icon.className = 'tab-icon';
-    icon.src =
-      tab.favIconUrl ||
-      'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2338bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
-    icon.onerror = () => {
-      icon.src =
-        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2338bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+    const img = document.createElement('img');
+    img.className = 'tab-favicon';
+    img.src = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
+    img.onerror = () => {
+      img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
     };
 
     const title = document.createElement('span');
-    title.className = 'tab-title';
+    title.className = 'tab-title-text';
     title.textContent = tab.title || tab.url || 'Pinned Tab';
     title.title = tab.url || '';
 
-    main.appendChild(icon);
-    main.appendChild(title);
+    info.appendChild(img);
+    info.appendChild(title);
 
-    // Switch to tab on click
-    main.addEventListener('click', async () => {
+    info.addEventListener('click', async () => {
       if (tab.id !== undefined) {
         await browser.tabs.update(tab.id, { active: true });
+        window.close();
       }
     });
 
@@ -277,72 +324,41 @@ function renderPinnedTabs(pinnedTabs: any[]): void {
     });
 
     actions.appendChild(unpinBtn);
-    row.appendChild(main);
+    row.appendChild(info);
     row.appendChild(actions);
     pinnedTabsList.appendChild(row);
   }
 }
 
 /**
- * Renders workspace cards list.
+ * Renders the workspaces list with switch and delete actions.
  */
-function renderWorkspaces(): void {
-  workspacesList.innerHTML = '';
+function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
+  workspacesList.replaceChildren();
 
-  for (const ws of currentWorkspaces) {
-    const card = document.createElement('div');
-    const isActive = ws.id === activeWorkspaceId;
-    card.className = `workspace-card ${isActive ? 'active' : ''}`;
+  for (const ws of workspaces) {
+    const item = document.createElement('div');
+    item.className = `workspace-item ${ws.id === activeId ? 'active' : ''}`;
 
     const info = document.createElement('div');
-    info.className = 'ws-info';
+    info.className = 'workspace-info';
 
-    const bullet = document.createElement('div');
-    bullet.className = 'ws-bullet';
+    const name = document.createElement('span');
+    name.className = 'ws-name';
+    name.textContent = ws.name;
 
-    const textWrap = document.createElement('div');
-    const nameEl = document.createElement('div');
-    nameEl.className = 'ws-name';
-    nameEl.textContent = ws.name;
-
-    const countEl = document.createElement('div');
-    countEl.className = 'ws-tab-count';
+    const count = document.createElement('span');
+    count.className = 'ws-tabs-count';
     const tabCount = ws.tabs ? ws.tabs.length : 0;
-    countEl.textContent = `${tabCount} tab${tabCount === 1 ? '' : 's'}`;
+    count.textContent = `(${tabCount})`;
 
-    textWrap.appendChild(nameEl);
-    textWrap.appendChild(countEl);
-    info.appendChild(bullet);
-    info.appendChild(textWrap);
+    info.appendChild(name);
+    info.appendChild(count);
 
-    const actions = document.createElement('div');
-    actions.className = 'ws-actions';
+    item.appendChild(info);
 
-    // Delete workspace button (only if more than 1 workspace)
-    if (currentWorkspaces.length > 1) {
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'btn btn-ghost btn-sm btn-danger';
-      deleteBtn.innerHTML = '&times;';
-      deleteBtn.title = 'Delete workspace';
-      deleteBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm(`Delete workspace "${ws.name}"? All tabs in this workspace will be closed.`)) {
-          await browser.runtime.sendMessage({
-            type: 'DELETE_WORKSPACE',
-            workspaceId: ws.id,
-          });
-          await refreshState();
-        }
-      });
-      actions.appendChild(deleteBtn);
-    }
-
-    card.appendChild(info);
-    card.appendChild(actions);
-
-    // Switch workspace on card click
-    card.addEventListener('click', async () => {
-      if (!isActive) {
+    item.addEventListener('click', async () => {
+      if (ws.id !== activeId) {
         await browser.runtime.sendMessage({
           type: 'SWITCH_WORKSPACE',
           workspaceId: ws.id,
@@ -351,80 +367,94 @@ function renderWorkspaces(): void {
       }
     });
 
-    workspacesList.appendChild(card);
+    if (workspaces.length > 1) {
+      const actions = document.createElement('div');
+      actions.className = 'ws-actions';
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'ws-del-btn';
+      delBtn.innerHTML = '&times;';
+      delBtn.title = `Delete workspace "${ws.name}"`;
+
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete workspace "${ws.name}" and close all its tabs?`)) {
+          await browser.runtime.sendMessage({
+            type: 'DELETE_WORKSPACE',
+            workspaceId: ws.id,
+          });
+          await refreshState();
+        }
+      });
+
+      actions.appendChild(delBtn);
+      item.appendChild(actions);
+    }
+
+    workspacesList.appendChild(item);
   }
 }
 
 /**
- * Renders tab list for the active workspace.
+ * Renders active tabs in current workspace with pin toggle and move actions.
  */
-function renderTabs(): void {
-  const activeWs = currentWorkspaces.find((w) => w.id === activeWorkspaceId);
-  const activeTabs = activeWs ? activeWs.tabs : [];
+function renderTabsList(tabs: any[], allWorkspaces: Workspace[]): void {
+  tabsList.replaceChildren();
 
-  activeWorkspaceTitle.textContent = activeWs ? activeWs.name : 'Active Tabs';
-  tabCountBadge.textContent = `${activeTabs.length} tab${activeTabs.length === 1 ? '' : 's'}`;
-  tabsList.innerHTML = '';
-
-  if (activeTabs.length === 0) {
-    const emptyMsg = document.createElement('div');
-    emptyMsg.style.padding = '12px';
-    emptyMsg.style.textAlign = 'center';
-    emptyMsg.style.color = 'var(--text-muted)';
-    emptyMsg.textContent = 'No open tabs in this workspace';
-    tabsList.appendChild(emptyMsg);
+  if (tabs.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.padding = '12px';
+    empty.style.textAlign = 'center';
+    empty.style.color = 'var(--text-muted)';
+    empty.textContent = 'No open tabs in this workspace.';
+    tabsList.appendChild(empty);
     return;
   }
 
-  for (const tab of activeTabs) {
+  for (const tab of tabs) {
     const row = document.createElement('div');
     row.className = 'tab-row';
 
-    const main = document.createElement('div');
-    main.className = 'tab-row-main';
-    main.style.cursor = 'pointer';
+    const info = document.createElement('div');
+    info.className = 'tab-info';
+    info.style.cursor = 'pointer';
 
-    const icon = document.createElement('img');
-    icon.className = 'tab-icon';
-    icon.src =
-      tab.favIconUrl ||
-      'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
-    icon.onerror = () => {
-      icon.src =
-        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+    const img = document.createElement('img');
+    img.className = 'tab-favicon';
+    img.src = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
+    img.onerror = () => {
+      img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
     };
 
     const title = document.createElement('span');
-    title.className = 'tab-title';
+    title.className = 'tab-title-text';
     title.textContent = tab.title || tab.url || 'Tab';
-    title.title = tab.url || '';
+    title.title = tab.url;
 
-    main.appendChild(icon);
-    main.appendChild(title);
+    info.appendChild(img);
+    info.appendChild(title);
 
-    // Switch to tab on click
-    main.addEventListener('click', async () => {
-      const tabId = tab.localTabId || (tab as any).id;
-      if (tabId !== undefined) {
-        await browser.tabs.update(tabId, { active: true });
+    info.addEventListener('click', async () => {
+      if (tab.localTabId !== undefined) {
+        await browser.tabs.update(tab.localTabId, { active: true });
+        window.close();
       }
     });
 
     const actions = document.createElement('div');
     actions.className = 'tab-actions';
 
-    // Pin tab button
+    // Pin button
     const pinBtn = document.createElement('button');
     pinBtn.className = `tab-pin-btn ${tab.pinned ? 'pinned' : ''}`;
-    pinBtn.title = tab.pinned ? 'Unpin tab' : 'Pin tab (global)';
+    pinBtn.title = tab.pinned ? 'Unpin tab' : 'Pin tab (Global)';
     pinBtn.innerHTML = '📌';
     pinBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const tabId = tab.localTabId || (tab as any).id;
-      if (tabId !== undefined) {
+      if (tab.localTabId !== undefined) {
         await browser.runtime.sendMessage({
           type: 'TOGGLE_PIN_TAB',
-          tabId,
+          tabId: tab.localTabId,
         });
         await refreshState();
       }
@@ -432,32 +462,27 @@ function renderTabs(): void {
     actions.appendChild(pinBtn);
 
     // Move to other workspace selector
-    if (currentWorkspaces.length > 1) {
+    if (allWorkspaces.length > 1) {
       const select = document.createElement('select');
-      select.className = 'ws-select';
+      select.className = 'tab-move-select';
       select.title = 'Move tab to another workspace';
 
-      const placeholderOpt = document.createElement('option');
-      placeholderOpt.value = '';
-      placeholderOpt.textContent = 'Move to...';
-      select.appendChild(placeholderOpt);
-
-      for (const otherWs of currentWorkspaces) {
-        if (otherWs.id !== activeWorkspaceId) {
-          const opt = document.createElement('option');
-          opt.value = otherWs.id;
-          opt.textContent = otherWs.name;
-          select.appendChild(opt);
-        }
+      for (const ws of allWorkspaces) {
+        const opt = document.createElement('option');
+        opt.value = ws.id;
+        opt.textContent = ws.name;
+        opt.selected = ws.id === activeWorkspaceId;
+        select.appendChild(opt);
       }
 
-      select.addEventListener('change', async () => {
-        const tabId = tab.localTabId || (tab as any).id;
-        if (select.value && tabId !== undefined) {
+      select.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        const targetWsId = select.value;
+        if (targetWsId !== activeWorkspaceId && tab.localTabId !== undefined) {
           await browser.runtime.sendMessage({
             type: 'MOVE_TAB_WORKSPACE',
-            tabId,
-            targetWorkspaceId: select.value,
+            tabId: tab.localTabId,
+            targetWorkspaceId: targetWsId,
           });
           await refreshState();
         }
@@ -466,33 +491,47 @@ function renderTabs(): void {
       actions.appendChild(select);
     }
 
-    row.appendChild(main);
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tab-close-btn';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.title = 'Close tab';
+    closeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (tab.localTabId !== undefined) {
+        await browser.tabs.remove(tab.localTabId);
+        await refreshState();
+      }
+    });
+    actions.appendChild(closeBtn);
+
+    row.appendChild(info);
     row.appendChild(actions);
     tabsList.appendChild(row);
   }
 }
 
 /**
- * Loads and renders the list of server backups and policy config.
+ * Loads backups from server and renders list & policy values.
  */
 async function loadAndRenderBackups(): Promise<void> {
-  const loadingEl = document.createElement('div');
-  loadingEl.style.textAlign = 'center';
-  loadingEl.style.padding = '12px';
-  loadingEl.style.color = 'var(--text-muted)';
-  loadingEl.textContent = 'Loading backups...';
-  backupsList.replaceChildren(loadingEl);
+  backupsList.replaceChildren();
+  const loading = document.createElement('div');
+  loading.style.padding = '12px';
+  loading.style.textAlign = 'center';
+  loading.style.color = 'var(--text-muted)';
+  loading.textContent = 'Loading backups from server...';
+  backupsList.appendChild(loading);
 
   try {
-    const data: BackupListResponse = await browser.runtime.sendMessage({ type: 'LIST_BACKUPS' });
+    const res: BackupListResponse = await browser.runtime.sendMessage({ type: 'LIST_BACKUPS' });
+    const backups: BackupMetadata[] = res.backups || [];
+    const config: BackupConfig = res.config || { interval: 'hourly', retentionCopies: 10 };
 
-    if (data.config) {
-      backupIntervalSelect.value = data.config.interval || 'daily';
-      backupRetentionInput.value = (data.config.retentionCopies || 10).toString();
-    }
-
-    const backups = data.backups || [];
+    backupIntervalSelect.value = config.interval;
+    backupRetentionInput.value = String(config.retentionCopies);
     backupsCountBadge.textContent = `${backups.length} cop${backups.length === 1 ? 'y' : 'ies'}`;
+
     backupsList.replaceChildren();
 
     if (backups.length === 0) {
@@ -564,7 +603,7 @@ async function loadAndRenderBackups(): Promise<void> {
               type: 'RESTORE_BACKUP',
               backupId: bk.id,
             });
-            backToWorkspacesBtn.click();
+            await switchSection('workspaces');
           } catch (err: any) {
             alert(`Restore failed: ${err.message}`);
           } finally {
@@ -616,7 +655,7 @@ async function loadAndRenderBackups(): Promise<void> {
 }
 
 /**
- * Explores a specific backup and renders tree in modal drawer.
+ * Explores a specific backup and renders tree in preview drawer.
  */
 async function exploreBackup(backupId: string): Promise<void> {
   backupExplorer.classList.remove('hidden');
@@ -740,53 +779,46 @@ async function handleFileSelected(file: File): Promise<void> {
   }
 }
 
-// Navigation Event Listeners
-toggleBackupsBtn.addEventListener('click', async () => {
-  settingsDrawer.classList.add('hidden');
-  importExportSection.classList.add('hidden');
-  const isBackupsVisible = !backupsSection.classList.contains('hidden');
+// Header & Global Actions
+syncNowBtn.addEventListener('click', async () => {
+  syncNowBtn.classList.add('spinning');
+  renderSyncStatus({ state: 'syncing', lastSyncTime: null, errorMessage: null });
 
-  if (isBackupsVisible) {
-    backupsSection.classList.add('hidden');
-    workspacesSection.classList.remove('hidden');
-    await refreshState();
-  } else {
-    workspacesSection.classList.add('hidden');
-    backupsSection.classList.remove('hidden');
-    await loadAndRenderBackups();
-  }
-});
-
-toggleImportExportBtn.addEventListener('click', async () => {
-  settingsDrawer.classList.add('hidden');
-  backupsSection.classList.add('hidden');
-  backupExplorer.classList.add('hidden');
-  const isImportExportVisible = !importExportSection.classList.contains('hidden');
-
-  if (isImportExportVisible) {
-    importExportSection.classList.add('hidden');
-    workspacesSection.classList.remove('hidden');
-    await refreshState();
-  } else {
-    workspacesSection.classList.add('hidden');
-    importExportSection.classList.remove('hidden');
+  try {
+    const updatedStatus = await browser.runtime.sendMessage({ type: 'SYNC_NOW' });
+    if (updatedStatus) {
+      renderSyncStatus(updatedStatus);
+    }
+  } catch (err: any) {
+    renderSyncStatus({ state: 'error', lastSyncTime: null, errorMessage: err.message });
+  } finally {
+    setTimeout(() => {
+      syncNowBtn.classList.remove('spinning');
+    }, 600);
     await refreshState();
   }
 });
 
-backToWorkspacesBtn.addEventListener('click', async () => {
-  backupsSection.classList.add('hidden');
-  backupExplorer.classList.add('hidden');
-  workspacesSection.classList.remove('hidden');
-  await refreshState();
+settingsBtn.addEventListener('click', async () => {
+  if (!document.body.classList.contains('tab-mode')) {
+    // Popup Mode: Open dedicated full-page tab
+    await browser.tabs.create({
+      url: browser.runtime.getURL('popup/index.html?mode=tab&section=settings'),
+    });
+    window.close();
+  } else {
+    // Tab Mode: Switch to settings section
+    await switchSection('settings');
+  }
 });
 
-backFromImportExportBtn.addEventListener('click', async () => {
-  importExportSection.classList.add('hidden');
-  workspacesSection.classList.remove('hidden');
-  await refreshState();
-});
+// Sidebar Navigation Items
+navWorkspaces?.addEventListener('click', () => switchSection('workspaces'));
+navBackups?.addEventListener('click', () => switchSection('backups'));
+navImportExport?.addEventListener('click', () => switchSection('importExport'));
+navSettings?.addEventListener('click', () => switchSection('settings'));
 
+// Explorer Close
 closeExplorerBtn.addEventListener('click', () => {
   backupExplorer.classList.add('hidden');
 });
@@ -834,42 +866,12 @@ exportStgBtn.addEventListener('click', async () => {
   }
 });
 
-// Open Dedicated Tab Full Window Button
-openTabBtn?.addEventListener('click', async () => {
-  let section = 'workspaces';
-  if (!importExportSection.classList.contains('hidden')) section = 'import';
-  if (!backupsSection.classList.contains('hidden')) section = 'backups';
-  await browser.tabs.create({
-    url: browser.runtime.getURL(`popup/index.html?mode=tab&section=${section}`)
-  });
-  window.close();
-});
-
-// Open Importer in Dedicated Tab Button
-openImportInTabBtn?.addEventListener('click', async () => {
-  await browser.tabs.create({
-    url: browser.runtime.getURL('popup/index.html?mode=tab&section=import')
-  });
-  window.close();
-});
-
 // Import STG File Input & Drag and Drop
 stgFileInput.addEventListener('change', (e) => {
   const target = e.target as HTMLInputElement;
   if (target.files && target.files.length > 0) {
     handleFileSelected(target.files[0]);
-    target.value = ''; // Reset so choosing the same file re-triggers change
-  }
-});
-
-// Drop zone click: if inside popup mode, open dedicated tab so file dialog doesn't close popup
-stgDropZone.addEventListener('click', async (e) => {
-  if (!document.body.classList.contains('tab-mode')) {
-    e.preventDefault();
-    await browser.tabs.create({
-      url: browser.runtime.getURL('popup/index.html?mode=tab&section=import')
-    });
-    window.close();
+    target.value = '';
   }
 });
 
@@ -895,7 +897,7 @@ stgDropZone.addEventListener('drop', (e) => {
   }
 });
 
-// Paste JSON Actions (live typing and paste handling)
+// Paste JSON Actions
 pasteJsonInput.addEventListener('input', () => {
   const text = pasteJsonInput.value.trim();
   if (text && (text.startsWith('{') || text.startsWith('['))) {
@@ -956,9 +958,7 @@ executeImportBtn.addEventListener('click', async () => {
     importFeedbackMsg.classList.remove('hidden');
 
     setTimeout(async () => {
-      importExportSection.classList.add('hidden');
-      workspacesSection.classList.remove('hidden');
-      await refreshState();
+      await switchSection('workspaces');
     }, 1200);
   } catch (err: any) {
     importFeedbackMsg.className = 'import-feedback error';
@@ -970,6 +970,7 @@ executeImportBtn.addEventListener('click', async () => {
   }
 });
 
+// Create Backup Manual Action
 createBackupBtn.addEventListener('click', async () => {
   createBackupBtn.disabled = true;
   createBackupBtn.textContent = 'Backing up...';
@@ -985,6 +986,7 @@ createBackupBtn.addEventListener('click', async () => {
   }
 });
 
+// Save Backup Policy
 saveBackupConfigBtn.addEventListener('click', async () => {
   saveBackupConfigBtn.disabled = true;
   saveBackupConfigBtn.textContent = 'Saving...';
@@ -1008,12 +1010,12 @@ saveBackupConfigBtn.addEventListener('click', async () => {
   }
 });
 
-// Settings Event Listeners
-toggleSettingsBtn.addEventListener('click', () => {
-  settingsDrawer.classList.toggle('hidden');
-});
-
+// Save Settings Action
 saveSettingsBtn.addEventListener('click', async () => {
+  saveSettingsBtn.disabled = true;
+  saveSettingsBtn.textContent = 'Saving...';
+  settingsFeedbackMsg.className = 'import-feedback hidden';
+
   const newSettings: SynapseSettings = {
     backendUrl: settingBackendUrl.value.trim() || 'http://localhost:8080',
     syncSecret: settingSyncSecret.value.trim() || 'synapse_dev_secret_123',
@@ -1024,31 +1026,54 @@ saveSettingsBtn.addEventListener('click', async () => {
 
   await browser.storage.local.set({ settings: newSettings });
   currentSettings = newSettings;
-  settingsDrawer.classList.add('hidden');
+
+  settingsFeedbackMsg.className = 'import-feedback success';
+  settingsFeedbackMsg.textContent = '✓ Configuration saved successfully!';
+  settingsFeedbackMsg.classList.remove('hidden');
+  saveSettingsBtn.disabled = false;
+  saveSettingsBtn.textContent = 'Save Configuration';
 
   // Trigger immediate sync
   syncNowBtn.click();
 });
 
-syncNowBtn.addEventListener('click', async () => {
-  syncNowBtn.classList.add('spinning');
-  renderSyncStatus({ state: 'syncing', lastSyncTime: null, errorMessage: null });
+// Test Connection Action
+testConnectionBtn?.addEventListener('click', async () => {
+  testConnectionBtn.disabled = true;
+  testConnectionBtn.textContent = 'Testing...';
+  settingsFeedbackMsg.className = 'import-feedback hidden';
+
+  const url = settingBackendUrl.value.trim() || 'http://localhost:8080';
+  const secret = settingSyncSecret.value.trim();
 
   try {
-    const updatedStatus = await browser.runtime.sendMessage({ type: 'SYNC_NOW' });
-    if (updatedStatus) {
-      renderSyncStatus(updatedStatus);
+    const startTime = performance.now();
+    const res = await fetch(`${url}/api/v1/health`, {
+      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
+    });
+    const latency = Math.round(performance.now() - startTime);
+
+    if (res.ok) {
+      const data = await res.json();
+      settingsFeedbackMsg.className = 'import-feedback success';
+      settingsFeedbackMsg.textContent = `✓ Server is reachable! (Status: ${data.status}, Redis: ${data.redis}, Latency: ${latency}ms)`;
+      settingsFeedbackMsg.classList.remove('hidden');
+    } else {
+      settingsFeedbackMsg.className = 'import-feedback error';
+      settingsFeedbackMsg.textContent = `Server responded with HTTP ${res.status}: ${res.statusText}`;
+      settingsFeedbackMsg.classList.remove('hidden');
     }
   } catch (err: any) {
-    renderSyncStatus({ state: 'error', lastSyncTime: null, errorMessage: err.message });
+    settingsFeedbackMsg.className = 'import-feedback error';
+    settingsFeedbackMsg.textContent = `Connection failed: ${err.message}`;
+    settingsFeedbackMsg.classList.remove('hidden');
   } finally {
-    setTimeout(() => {
-      syncNowBtn.classList.remove('spinning');
-    }, 600);
-    await refreshState();
+    testConnectionBtn.disabled = false;
+    testConnectionBtn.textContent = 'Test Connection';
   }
 });
 
+// Workspaces Add Actions
 addWorkspaceBtn.addEventListener('click', () => {
   newWorkspaceRow.classList.remove('hidden');
   newWorkspaceInput.value = '';
@@ -1083,20 +1108,16 @@ newWorkspaceInput.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const isTab = urlParams.get('mode') === 'tab' || !window.location.href.startsWith('moz-extension://') || window.innerWidth > 500;
+
   if (isTab) {
     document.body.classList.add('tab-mode');
   }
 
-  const section = urlParams.get('section');
-  if (section === 'import') {
-    workspacesSection.classList.add('hidden');
-    backupsSection.classList.add('hidden');
-    importExportSection.classList.remove('hidden');
-  } else if (section === 'backups') {
-    workspacesSection.classList.add('hidden');
-    importExportSection.classList.add('hidden');
-    backupsSection.classList.remove('hidden');
-    await loadAndRenderBackups();
+  const requestedSection = urlParams.get('section') as any;
+  if (isTab && requestedSection && ['workspaces', 'backups', 'importExport', 'settings'].includes(requestedSection)) {
+    await switchSection(requestedSection);
+  } else {
+    await switchSection('workspaces');
   }
 
   await loadAndDisplaySettings();
