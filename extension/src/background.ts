@@ -248,6 +248,39 @@ function setupMessageListener(): void {
         return { success: true };
       }
 
+      case 'LIST_BACKUPS': {
+        const settings = await loadSettings();
+        return await SynapseApiClient.listBackups(settings);
+      }
+
+      case 'GET_BACKUP': {
+        const settings = await loadSettings();
+        return await SynapseApiClient.getBackup(settings, message.backupId);
+      }
+
+      case 'CREATE_BACKUP': {
+        const settings = await loadSettings();
+        return await SynapseApiClient.createBackup(settings);
+      }
+
+      case 'RESTORE_BACKUP': {
+        const settings = await loadSettings();
+        const res = await SynapseApiClient.restoreBackup(settings, message.backupId);
+        // Trigger immediate pull sync to synchronize active local tabs
+        await pullSync();
+        return res;
+      }
+
+      case 'DELETE_BACKUP': {
+        const settings = await loadSettings();
+        return await SynapseApiClient.deleteBackup(settings, message.backupId);
+      }
+
+      case 'UPDATE_BACKUP_CONFIG': {
+        const settings = await loadSettings();
+        return await SynapseApiClient.updateBackupConfig(settings, message.config);
+      }
+
       default:
         return { error: 'Unknown action' };
     }

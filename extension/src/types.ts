@@ -55,3 +55,30 @@ export interface SyncStatus {
   lastSyncTime: number | null;
   errorMessage: string | null;
 }
+
+export type BackupFrequency = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'disabled';
+
+export interface BackupMetadata {
+  id: string;
+  timestamp: number;
+  reason: 'scheduled' | 'manual';
+  workspaces_count: number;
+  tabs_count: number;
+  client_id: string;
+  size_bytes?: number;
+}
+
+export interface BackupRecord extends BackupMetadata {
+  snapshot: SyncPayload;
+}
+
+export interface BackupConfig {
+  interval: BackupFrequency;
+  retentionCopies: number;
+}
+
+export interface BackupListResponse {
+  backups: BackupMetadata[];
+  config: BackupConfig;
+}
+

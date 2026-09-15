@@ -464,6 +464,233 @@ input[type="password"]:focus {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Main Content Visibility */
+.main-content.hidden {
+  display: none;
+}
+
+.title-with-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Backup Schedule Config Card */
+.backup-config-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.styled-select,
+.styled-input-num {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  outline: none;
+  width: 100%;
+}
+
+.styled-select:focus,
+.styled-input-num:focus {
+  border-color: var(--border-focus);
+}
+
+.config-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.section-subtitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Backups list */
+.backups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.backup-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.backup-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.backup-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.backup-time {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.backup-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.backup-badge.scheduled {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.backup-badge.manual {
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--accent-violet);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.backup-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.backup-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.backup-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Backup Explorer */
+.backup-explorer {
+  background: #0d1322;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  animation: slideDown 0.2s ease forwards;
+}
+
+.backup-explorer.hidden {
+  display: none;
+}
+
+.explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+}
+
+.explorer-title {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.text-muted-xs {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.explorer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.explorer-ws-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.explorer-ws-title {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--accent-cyan);
+}
+
+.explorer-tab-item {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explorer-tab-item:hover {
+  color: var(--text-primary);
+  border-left-color: var(--accent-purple);
+}
+
 /* Footer */
 .footer {
   padding: 10px 16px;
@@ -482,3 +709,4 @@ input[type="password"]:focus {
   padding: 1px 5px;
   border-radius: 4px;
 }
+

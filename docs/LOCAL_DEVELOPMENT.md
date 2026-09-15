@@ -129,6 +129,16 @@ npm run dev:client-b
 3. Notice tabs from the `Main` workspace are hidden from the tab bar via `browser.tabs.hide()`.
 4. In **Client B**, the `Research` workspace appears with its corresponding tabs. Switching workspaces smoothly hides and reveals tabs in the unified session.
 
+### Test Scenario 4: Server Backups, Exploration, Restoration & Deletion
+1. In **Client A**, open the popup and click the **Server Backups** icon button (database icon next to settings).
+2. The UI smoothly transitions to the **Server Backups** panel.
+3. Click **+ Backup Now**. The server creates a timestamped snapshot of your current workspaces in Redis.
+4. Click **Explore** on the newly created backup to inspect all workspaces and tabs recorded within the snapshot.
+5. In **Client A**, delete or close several tabs or workspaces.
+6. Return to the **Server Backups** panel, click **Restore**, and confirm the dialog.
+7. Observe that the workspace state is immediately restored on the server and synchronized to both **Client A** and **Client B**.
+8. Test deleting past backups with confirmation and adjusting the **Auto-Backup Policy** (`Hourly`, `Daily`, `Weekly`, `Monthly`, `Disabled`) and **Max Copies** retention limit.
+
 ---
 
 ## 6. Inspecting Logs & Debugging via `about:debugging`

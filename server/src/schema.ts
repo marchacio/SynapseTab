@@ -23,3 +23,32 @@ export const SyncPayloadSchema = Type.Object({
 }, { additionalProperties: false });
 
 export type SyncPayloadType = Static<typeof SyncPayloadSchema>;
+
+export const BackupConfigSchema = Type.Object({
+  interval: Type.Union([
+    Type.Literal('hourly'),
+    Type.Literal('daily'),
+    Type.Literal('weekly'),
+    Type.Literal('monthly'),
+    Type.Literal('disabled'),
+  ]),
+  retentionCopies: Type.Integer({ minimum: 1, maximum: 100 }),
+}, { additionalProperties: false });
+
+export type BackupConfigType = Static<typeof BackupConfigSchema>;
+
+export const BackupMetadataSchema = Type.Object({
+  id: Type.String({ minLength: 1 }),
+  timestamp: Type.Number(),
+  reason: Type.Union([Type.Literal('scheduled'), Type.Literal('manual')]),
+  workspaces_count: Type.Integer({ minimum: 0 }),
+  tabs_count: Type.Integer({ minimum: 0 }),
+  client_id: Type.String(),
+  size_bytes: Type.Optional(Type.Integer()),
+}, { additionalProperties: false });
+
+export const BackupListResponseSchema = Type.Object({
+  backups: Type.Array(BackupMetadataSchema),
+  config: BackupConfigSchema,
+}, { additionalProperties: false });
+

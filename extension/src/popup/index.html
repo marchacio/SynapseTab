@@ -34,6 +34,13 @@
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
           </svg>
         </button>
+        <button id="toggleBackupsBtn" class="icon-button" title="Server Backups">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+        </button>
         <button id="toggleSettingsBtn" class="icon-button" title="Settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -70,7 +77,7 @@
     </section>
 
     <!-- Main Workspace Section -->
-    <main class="main-content">
+    <main id="workspacesSection" class="main-content">
       <div class="section-title">
         <h2>Workspaces</h2>
         <button id="addWorkspaceBtn" class="btn btn-sm btn-ghost">+ New</button>
@@ -96,6 +103,69 @@
 
       <div id="tabsList" class="tabs-list">
         <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Backups Management Section -->
+    <main id="backupsSection" class="main-content hidden">
+      <div class="section-title">
+        <div class="title-with-back">
+          <button id="backToWorkspacesBtn" class="btn btn-sm btn-ghost" title="Back to Workspaces">
+            &larr; Back
+          </button>
+          <h2>Server Backups</h2>
+        </div>
+        <button id="createBackupBtn" class="btn btn-sm btn-primary">+ Backup Now</button>
+      </div>
+
+      <!-- Backup Schedule Config Card -->
+      <div class="backup-config-card">
+        <div class="config-header">
+          <span class="config-title">Auto-Backup Policy</span>
+        </div>
+        <div class="config-grid">
+          <div class="form-group">
+            <label for="backupIntervalSelect">Frequency</label>
+            <select id="backupIntervalSelect" class="styled-select">
+              <option value="hourly">Hourly</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="backupRetentionInput">Max Copies</label>
+            <input type="number" id="backupRetentionInput" min="1" max="100" value="10" class="styled-input-num">
+          </div>
+        </div>
+        <div class="config-actions">
+          <button id="saveBackupConfigBtn" class="btn btn-sm btn-secondary">Save Policy</button>
+        </div>
+      </div>
+
+      <!-- Backups List -->
+      <div class="section-subtitle">
+        <span>Stored Snapshots</span>
+        <span class="badge" id="backupsCountBadge">0 copies</span>
+      </div>
+
+      <div id="backupsList" class="backups-list">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Backup Exploration Modal / Drawer -->
+      <div id="backupExplorer" class="backup-explorer hidden">
+        <div class="explorer-header">
+          <div class="explorer-title">
+            <span id="explorerSnapshotName">Snapshot Explorer</span>
+            <span id="explorerSnapshotDate" class="text-muted-xs"></span>
+          </div>
+          <button id="closeExplorerBtn" class="btn btn-ghost btn-sm" title="Close preview">&times;</button>
+        </div>
+        <div id="explorerContent" class="explorer-content">
+          <!-- Rendered dynamically -->
+        </div>
       </div>
     </main>
 

@@ -54,13 +54,19 @@ State reconciliation is computed via a `diff` algorithm that produces a plan of 
 ### 6. Durable Persistence Layer
 State is stored in Redis 7+ with Append-Only file (`appendonly yes`) logging enabled, keyed under `tabvortex:workspaces:<user_id>`.
 
+### 7. Automated Server Backups & Retention Policy
+Historical workspace snapshots are backed up directly on the server without client-side storage overhead:
+- **Periodic Snapshot Scheduler**: Automated background snapshots configurable to run `hourly`, `daily`, `weekly`, or `monthly`.
+- **Intelligent Retention Pruning**: Configurable retention limits (`maxCopies`, default 10) automatically prune older copies upon new snapshot creation.
+- **Visual Management UI**: Dedicated popup panel with direct controls to explore snapshot workspaces/tabs, restore past states with immediate client reconciliation, or delete backups.
+
 ---
 
 ---
 
 ## 3. Local development
 
-See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full concurrency testing scenarios.
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full concurrency testing scenarios and backup simulation.
 
 ---
 
@@ -72,7 +78,7 @@ Deploy SynapseTab on a home server (in my case Proxmox, but works also with Port
 ```bash
 # 1. Create production environment configuration
 cp .env.example .env
-# Edit .env to set your SYNC_SECRET
+# Edit .env to set your SYNC_SECRET, BACKUP_INTERVAL, and BACKUP_RETENTION_COPIES
 
 # 2. Start the production stack
 docker compose -f deploy/docker-compose.prod.yml up -d
@@ -82,6 +88,14 @@ docker compose -f deploy/docker-compose.prod.yml up -d
 - `POST /api/v1/sync`: Persists workspace snapshot (Requires `Authorization: Bearer <SYNC_SECRET>`).
 - `GET /api/v1/sync`: Returns latest workspace snapshot (Requires `Authorization: Bearer <SYNC_SECRET>`).
 - `GET /api/v1/health`: Readiness probe returning 200 OK and Redis connection status.
+- `GET /api/v1/backups`: Lists stored backup metadata and active retention policy.
+- `POST /api/v1/backups`: Triggers an immediate manual snapshot backup.
+- `GET /api/v1/backups/:id`: Returns detailed snapshot contents for preview and exploration.
+- `POST /api/v1/backups/:id/restore`: Restores a snapshot into the active workspace state.
+- `DELETE /api/v1/backups/:id`: Deletes a specific backup snapshot.
+- `GET /api/v1/backups/config`: Fetches user backup schedule and retention policy.
+- `POST /api/v1/backups/config`: Updates backup schedule and retention policy.
+
 
 ---
 
@@ -111,4 +125,4 @@ Released under the **MIT License**. 100% Free and Open-Source Software (FOSS).
 
 ## 7. AI usage
 
-The entire project was developed using the Antigravity agent-based IDE, in accordance with all best practices for software development and the use of AI.
+The entire project was developed using the Antigravity agent-based IDE (as you can see from the GEMINI.md file), in accordance with all best practices for software development and the use of AI.

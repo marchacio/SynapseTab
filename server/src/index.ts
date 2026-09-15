@@ -3,9 +3,16 @@ import cors from '@fastify/cors';
 import { config } from './config.js';
 import { createRedisClient, closeRedis } from './redis.js';
 import { registerRoutes } from './routes.js';
+import { BackupScheduler } from './backup-scheduler.js';
 import { Redis as RedisClient } from 'ioredis';
 
-export async function buildServer(options: { customRedis?: RedisClient } = {}): Promise<FastifyInstance> {
+export interface BuildServerOptions {
+  customRedis?: RedisClient;
+  enableScheduler?: boolean;
+  schedulerIntervalMs?: number;
+}
+
+export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: process.env.NODE_ENV === 'test' ? false : {
       level: 'info',
@@ -20,7 +27,7 @@ export async function buildServer(options: { customRedis?: RedisClient } = {}): 
 
   await app.register(cors, {
     origin: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   // Initialize Redis
@@ -28,6 +35,16 @@ export async function buildServer(options: { customRedis?: RedisClient } = {}): 
 
   // Register API endpoints
   await registerRoutes(app);
+
+  // Initialize and start backup scheduler if enabled
+  const shouldEnableScheduler = options.enableScheduler ?? (process.env.NODE_ENV !== 'test');
+  if (shouldEnableScheduler) {
+    const scheduler = new BackupScheduler(options.schedulerIntervalMs);
+    scheduler.start();
+    app.addHook('onClose', async () => {
+      scheduler.stop();
+    });
+  }
 
   return app;
 }
