@@ -496,11 +496,12 @@ export class WorkspaceManager {
    */
   static async importWorkspacesAndTabs(
     importedWorkspaces: Workspace[],
-    importedPinnedTabs: TabItem[] = [],
-    mode: 'merge' | 'replace' = 'replace'
+    importedPinnedTabs: TabItem[],
+    mode: 'merge' | 'replace' = 'replace',
+    preferredActiveWorkspaceId?: string
   ): Promise<void> {
     if (importedWorkspaces.length === 0) {
-      throw new Error('No valid workspaces found in import payload');
+      importedWorkspaces = [{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, tabs: [] }];
     }
 
     // Helper to safely create a tab with lazy materialization support
@@ -569,7 +570,10 @@ export class WorkspaceManager {
         .filter((t) => t.id !== undefined)
         .map((t) => t.id as number);
 
-      const targetActiveWs = importedWorkspaces[0].id;
+      const targetActiveWs = (preferredActiveWorkspaceId && importedWorkspaces.some((w) => w.id === preferredActiveWorkspaceId))
+        ? preferredActiveWorkspaceId
+        : importedWorkspaces[0].id;
+
       const createdTabIds = new Set<number>();
       const tabsToHide: number[] = [];
 
@@ -588,8 +592,8 @@ export class WorkspaceManager {
         }
       }
 
-      // 3. Create tabs for active workspace (first workspace)
-      const activeWs = importedWorkspaces[0];
+      // 3. Create tabs for active workspace
+      const activeWs = importedWorkspaces.find((w) => w.id === targetActiveWs) || importedWorkspaces[0];
       let activeTabCreated = false;
 
       for (let i = 0; i < activeWs.tabs.length; i++) {
@@ -625,8 +629,8 @@ export class WorkspaceManager {
       }
 
       // 4. Create tabs for inactive workspaces
-      for (let wIdx = 1; wIdx < importedWorkspaces.length; wIdx++) {
-        const otherWs = importedWorkspaces[wIdx];
+      for (const otherWs of importedWorkspaces) {
+        if (otherWs.id === targetActiveWs) continue;
         for (const tab of otherWs.tabs) {
           const createdId = await createSafeTab(
             tab.url,

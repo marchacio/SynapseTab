@@ -240,13 +240,14 @@ async function refreshState(): Promise<void> {
   currentWorkspaces = storedWorkspaces.map((ws) => ({
     id: ws.id,
     name: ws.name,
-    tabs: (wsMap.get(ws.id) || []).map((t) => ({
+    tabs: (wsMap.get(ws.id) || []).map((t, idx) => ({
       uuid: '',
       url: t.url || '',
       title: t.title || '',
       favIconUrl: t.favIconUrl || undefined,
       pinned: t.pinned || false,
       active: t.active || false,
+      index: t.index ?? idx,
       localTabId: t.id,
     })),
   }));
@@ -604,6 +605,7 @@ async function loadAndRenderBackups(): Promise<void> {
               backupId: bk.id,
             });
             await switchSection('workspaces');
+            await refreshState();
           } catch (err: any) {
             alert(`Restore failed: ${err.message}`);
           } finally {

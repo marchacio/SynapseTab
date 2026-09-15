@@ -2,7 +2,7 @@ import { SynapseApiClient } from './api.js';
 import { reconcile } from './diff.js';
 import { WorkspaceManager, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
 import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
-import { SynapseSettings, SyncStatus } from './types.js';
+import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace } from './types.js';
 
 const DEBOUNCE_DELAY_MS = 1000;
 const DEFAULT_SETTINGS: SynapseSettings = {
@@ -330,8 +330,47 @@ function setupMessageListener(): void {
       case 'RESTORE_BACKUP': {
         const settings = await loadSettings();
         const res = await SynapseApiClient.restoreBackup(settings, message.backupId);
-        // Trigger immediate pull sync to synchronize active local tabs
-        await pullSync();
+        if (!res || !res.restored_snapshot) {
+          throw new Error('Failed to restore backup snapshot from server');
+        }
+
+        const restoredSnapshot: SyncPayload = res.restored_snapshot;
+        const pinnedTabs: TabItem[] = [];
+        const workspaces: Workspace[] = [];
+
+        for (const ws of (restoredSnapshot.workspaces || [])) {
+          const wsRegularTabs: TabItem[] = [];
+          for (const tab of (ws.tabs || [])) {
+            if (tab.pinned) {
+              if (!pinnedTabs.some((p) => p.url === tab.url || (p.uuid && p.uuid === tab.uuid))) {
+                pinnedTabs.push(tab);
+              }
+            } else {
+              wsRegularTabs.push(tab);
+            }
+          }
+          workspaces.push({
+            id: ws.id,
+            name: ws.name,
+            tabs: wsRegularTabs,
+          });
+        }
+
+        isApplyingRemoteDiff = true;
+        try {
+          await WorkspaceManager.importWorkspacesAndTabs(
+            workspaces.length > 0 ? workspaces : [{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, tabs: [] }],
+            pinnedTabs,
+            'replace',
+            restoredSnapshot.active_workspace_id
+          );
+        } finally {
+          setTimeout(() => {
+            isApplyingRemoteDiff = false;
+            triggerPushSync();
+          }, 600);
+        }
+
         return res;
       }
 
