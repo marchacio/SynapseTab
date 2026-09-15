@@ -39,6 +39,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - SYNC_SECRET=${SYNC_SECRET:?Please set SYNC_SECRET in .env}
       - USER_ID=${USER_ID:-default}
+      - BACKUP_INTERVAL=${BACKUP_INTERVAL:-daily}
+      - BACKUP_RETENTION_COPIES=${BACKUP_RETENTION_COPIES:-10}
       - NODE_ENV=production
     networks:
       - synapsetab-internal

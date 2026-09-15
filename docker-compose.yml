@@ -22,6 +22,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - SYNC_SECRET=synapse_dev_secret_123
       - USER_ID=default
+      - BACKUP_INTERVAL=daily
+      - BACKUP_RETENTION_COPIES=10
     depends_on:
       - redis
     restart: unless-stopped
