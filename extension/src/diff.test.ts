@@ -457,4 +457,72 @@ describe('SynapseTab Reconcile & Diff Engine (reconcile)', () => {
     expect(plan.tabsToClose).toHaveLength(0);
     expect(plan.tabsToUpdate).toHaveLength(0);
   });
+
+  it('Scenario 9: Handles remote state with empty workspace tabs', () => {
+    const localWithTab: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'default',
+      workspaces: [
+        {
+          id: 'default',
+          name: 'Main',
+          tabs: [
+            {
+              uuid: 'local-init-tab',
+              url: 'about:blank',
+              title: 'New Tab',
+              pinned: false,
+              index: 0,
+              localTabId: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    const remoteEmpty: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'default',
+      workspaces: [
+        {
+          id: 'default',
+          name: 'Main',
+          tabs: [],
+        },
+      ],
+    };
+
+    const plan = reconcile(localWithTab, remoteEmpty);
+    expect(plan.tabsToCreate).toHaveLength(0);
+    expect(plan.tabsToClose).toHaveLength(1);
+    expect(plan.tabsToClose[0].uuid).toBe('local-init-tab');
+  });
+
+  it('Scenario 10: Propagates remote active workspace changes', () => {
+    const localState: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'default', name: 'Main', tabs: [] },
+        { id: 'work', name: 'Work', tabs: [] },
+      ],
+    };
+
+    const remoteState: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'work',
+      workspaces: [
+        { id: 'default', name: 'Main', tabs: [] },
+        { id: 'work', name: 'Work', tabs: [] },
+      ],
+    };
+
+    const plan = reconcile(localState, remoteState);
+    expect(plan.activeWorkspaceId).toBe('work');
+  });
 });
+
