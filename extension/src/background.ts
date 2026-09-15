@@ -207,10 +207,18 @@ function setupMessageListener(): void {
         await pullSync();
         return currentStatus;
 
-      case 'SWITCH_WORKSPACE':
-        await WorkspaceManager.switchToWorkspace(message.workspaceId);
-        triggerPushSync();
+      case 'SWITCH_WORKSPACE': {
+        isApplyingRemoteDiff = true;
+        try {
+          await WorkspaceManager.switchToWorkspace(message.workspaceId);
+        } finally {
+          setTimeout(() => {
+            isApplyingRemoteDiff = false;
+            triggerPushSync();
+          }, 300);
+        }
         return { success: true };
+      }
 
       case 'CREATE_WORKSPACE': {
         const stored = await WorkspaceManager.getStoredWorkspaces();
@@ -229,8 +237,21 @@ function setupMessageListener(): void {
         }
         const filtered = stored.filter((w) => w.id !== message.workspaceId);
         await WorkspaceManager.saveStoredWorkspaces(filtered);
+
+        // Reassign all tabs in deleted workspace to fallback workspace
+        const fallbackWs = filtered[0].id;
+        const allTabs = await browser.tabs.query({ currentWindow: true });
+        for (const t of allTabs) {
+          if (t.id !== undefined) {
+            const ws = await WorkspaceManager.getTabWorkspaceId(t.id, activeWs);
+            if (ws === message.workspaceId) {
+              await WorkspaceManager.setTabWorkspaceId(t.id, fallbackWs);
+            }
+          }
+        }
+
         if (activeWs === message.workspaceId) {
-          await WorkspaceManager.switchToWorkspace(filtered[0].id);
+          await WorkspaceManager.switchToWorkspace(fallbackWs);
         }
         triggerPushSync();
         return { success: true };
@@ -241,8 +262,24 @@ function setupMessageListener(): void {
         const activeWs = await WorkspaceManager.getActiveWorkspaceId();
         if (message.targetWorkspaceId !== activeWs) {
           try {
+            const currentTab = await browser.tabs.get(message.tabId);
+            if (currentTab.active) {
+              const allTabs = await browser.tabs.query({ currentWindow: true });
+              const otherTab = allTabs.find((t) => t.id !== message.tabId && !t.hidden);
+              if (otherTab && otherTab.id) {
+                await browser.tabs.update(otherTab.id, { active: true });
+              } else {
+                const newTab = await browser.tabs.create({ active: true, url: 'about:blank' });
+                if (newTab.id) {
+                  await WorkspaceManager.getOrAssignTabUuid(newTab.id);
+                  await WorkspaceManager.setTabWorkspaceId(newTab.id, activeWs);
+                }
+              }
+            }
             await browser.tabs.hide(message.tabId);
-          } catch {}
+          } catch (err) {
+            console.warn('[WorkspaceManager] Failed to hide moved tab:', err);
+          }
         }
         triggerPushSync();
         return { success: true };
@@ -268,6 +305,9 @@ async function init(): Promise<void> {
       { id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME },
     ]);
   }
+
+  // Initialize and assign UUIDs and workspaces for all existing tabs
+  await WorkspaceManager.initializeExistingTabs();
 
   setupTabListeners();
   setupAlarms();

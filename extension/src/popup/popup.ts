@@ -113,7 +113,11 @@ async function refreshState(): Promise<void> {
     let wsId = activeWorkspaceId;
     try {
       const storedWs = await browser.sessions.getTabValue(tab.id, 'workspace_id');
-      if (typeof storedWs === 'string') wsId = storedWs;
+      if (typeof storedWs === 'string' && storedWs.length > 0) {
+        wsId = storedWs;
+      } else {
+        await browser.sessions.setTabValue(tab.id, 'workspace_id', activeWorkspaceId);
+      }
     } catch {}
 
     if (!wsMap.has(wsId)) {
