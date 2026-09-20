@@ -1,11 +1,19 @@
-# SynapseTab
+<p align="center">
+  <img src="extension/icons/icon-128.png" alt="SynapseTab Logo" width="96" height="96">
+</p>
 
-**Ultra-lightweight, self-hosted workspace and tab state synchronization for Mozilla Firefox.**
+<h1 align="center">SynapseTab</h1>
 
-[![Continuous Integration](https://github.com/marchacio/SynapseTab/actions/workflows/ci.yml/badge.svg)](https://github.com/marchacio/SynapseTab/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Firefox Manifest V3](https://img.shields.io/badge/Firefox-Manifest%20V3-FF7139.svg)](https://addons.mozilla.org)
-[![Docker Multi-Arch](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-blue)](https://ghcr.io)
+<p align="center">
+  <strong>Ultra-lightweight, self-hosted workspace and tab state synchronization for Mozilla Firefox.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/marchacio/SynapseTab/actions/workflows/ci.yml"><img src="https://github.com/marchacio/SynapseTab/actions/workflows/ci.yml/badge.svg" alt="Continuous Integration"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://addons.mozilla.org"><img src="https://img.shields.io/badge/Firefox-Manifest%20V3-FF7139.svg" alt="Firefox Manifest V3"></a>
+  <a href="https://ghcr.io"><img src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-blue" alt="Docker Multi-Arch"></a>
+</p>
 
 ---
 

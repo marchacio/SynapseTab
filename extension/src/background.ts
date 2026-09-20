@@ -225,10 +225,48 @@ function setupMessageListener(): void {
       case 'CREATE_WORKSPACE': {
         const stored = await WorkspaceManager.getStoredWorkspaces();
         const id = `ws-${crypto.randomUUID().slice(0, 6)}`;
-        stored.push({ id, name: message.name || 'New Workspace' });
+        stored.push({
+          id,
+          name: message.name || 'New Workspace',
+          customType: message.customType,
+          customValue: message.customValue,
+          color: message.color,
+          icon: message.icon,
+        });
         await WorkspaceManager.saveStoredWorkspaces(stored);
-        triggerPushSync();
+        await pushSync();
         return { success: true, id };
+      }
+
+      case 'UPDATE_WORKSPACE': {
+        const stored = await WorkspaceManager.getStoredWorkspaces();
+        const targetIndex = stored.findIndex((w) => w.id === message.workspaceId);
+        if (targetIndex === -1) {
+          throw new Error(`Workspace with id ${message.workspaceId} not found`);
+        }
+        const nextCustomType = message.customType !== undefined ? message.customType : stored[targetIndex].customType;
+        let nextCustomValue: string | undefined;
+        if (nextCustomType === 'default') {
+          nextCustomValue = undefined;
+        } else if (message.customValue !== undefined) {
+          nextCustomValue = message.customValue;
+        } else {
+          nextCustomValue = stored[targetIndex].customValue;
+        }
+
+        const nextIcon = message.icon !== undefined ? message.icon : (nextCustomType === 'emoji' ? nextCustomValue : undefined);
+
+        stored[targetIndex] = {
+          id: stored[targetIndex].id,
+          name: message.name !== undefined ? message.name : stored[targetIndex].name,
+          customType: nextCustomType,
+          customValue: nextCustomValue,
+          color: message.color !== undefined ? message.color : stored[targetIndex].color,
+          icon: nextIcon,
+        };
+        await WorkspaceManager.saveStoredWorkspaces(stored);
+        await pushSync();
+        return { success: true };
       }
 
       case 'DELETE_WORKSPACE': {
@@ -280,7 +318,7 @@ function setupMessageListener(): void {
         }
 
         await WorkspaceManager.saveStoredWorkspaces(filtered);
-        triggerPushSync();
+        await pushSync();
         return { success: true };
       }
 
@@ -352,6 +390,10 @@ function setupMessageListener(): void {
           workspaces.push({
             id: ws.id,
             name: ws.name,
+            customType: ws.customType,
+            customValue: ws.customValue,
+            color: ws.color,
+            icon: ws.icon,
             tabs: wsRegularTabs,
           });
         }

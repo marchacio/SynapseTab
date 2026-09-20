@@ -13,6 +13,15 @@ export const WorkspaceSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
   name: Type.String(),
   tabs: Type.Array(TabItemSchema),
+  customType: Type.Optional(Type.Union([
+    Type.Literal('emoji'),
+    Type.Literal('text'),
+    Type.Literal('color'),
+    Type.Literal('default'),
+  ])),
+  customValue: Type.Optional(Type.String()),
+  color: Type.Optional(Type.String()),
+  icon: Type.Optional(Type.String()),
 }, { additionalProperties: false });
 
 export const SyncPayloadSchema = Type.Object({

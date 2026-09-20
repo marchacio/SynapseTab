@@ -1,0 +1,8 @@
+/**
+ * Android Material 3 (Material You) Theme Entry Point
+ * SynapseTab
+ */
+
+@import './tokens.css';
+@import './components.css';
+@import './layout.css';

@@ -524,5 +524,139 @@ describe('SynapseTab Reconcile & Diff Engine (reconcile)', () => {
     const plan = reconcile(localState, remoteState);
     expect(plan.activeWorkspaceId).toBe('work');
   });
+
+  it('Scenario 11: Propagates workspace visual customizations (emoji, text tag, color box)', () => {
+    const localState: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'default',
+      workspaces: [{ id: 'default', name: 'Main', tabs: [] }],
+    };
+
+    const remoteState: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'default', name: 'Main', tabs: [] },
+        {
+          id: 'dev-ws',
+          name: 'Development',
+          customType: 'emoji',
+          customValue: '🚀',
+          color: '#d0bcff',
+          icon: '🚀',
+          tabs: [],
+        },
+        {
+          id: 'tag-ws',
+          name: 'Research',
+          customType: 'text',
+          customValue: 'RES',
+          color: '#7cd1ff',
+          tabs: [],
+        },
+      ],
+    };
+
+    const plan = reconcile(localState, remoteState);
+    expect(plan.workspacesToCreate).toHaveLength(2);
+    expect(plan.workspacesToCreate[0]).toEqual({
+      id: 'dev-ws',
+      name: 'Development',
+      customType: 'emoji',
+      customValue: '🚀',
+      color: '#d0bcff',
+      icon: '🚀',
+    });
+    expect(plan.workspacesToCreate[1]).toEqual({
+      id: 'tag-ws',
+      name: 'Research',
+      customType: 'text',
+      customValue: 'RES',
+      color: '#7cd1ff',
+      icon: undefined,
+    });
+  });
+
+  it('Scenario 12: Reconciles updates to existing workspace customization and name (workspacesToUpdate)', () => {
+    const localState: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'default', name: 'Main', tabs: [] },
+        { id: 'ws-spots', name: 'Spots', tabs: [] },
+        { id: 'ws-cv', name: 'CV', tabs: [] },
+      ],
+    };
+
+    const remoteState: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'default', name: 'Nav', customType: 'emoji', customValue: '⭐', icon: '⭐', color: '#d0bcff', tabs: [] },
+        { id: 'ws-spots', name: 'Spots', customType: 'text', customValue: 'S', color: '#a8c7fa', tabs: [] },
+        { id: 'ws-cv', name: 'CV', customType: 'emoji', customValue: '📚', icon: '📚', color: '#7bd88f', tabs: [] },
+      ],
+    };
+
+    const plan = reconcile(localState, remoteState);
+    expect(plan.workspacesToCreate).toHaveLength(0);
+    expect(plan.workspacesToRemove).toHaveLength(0);
+    expect(plan.workspacesToUpdate).toHaveLength(3);
+
+    expect(plan.workspacesToUpdate).toContainEqual({
+      id: 'default',
+      name: 'Nav',
+      customType: 'emoji',
+      customValue: '⭐',
+      color: '#d0bcff',
+      icon: '⭐',
+    });
+
+    expect(plan.workspacesToUpdate).toContainEqual({
+      id: 'ws-spots',
+      name: 'Spots',
+      customType: 'text',
+      customValue: 'S',
+      color: '#a8c7fa',
+      icon: undefined,
+    });
+
+    expect(plan.workspacesToUpdate).toContainEqual({
+      id: 'ws-cv',
+      name: 'CV',
+      customType: 'emoji',
+      customValue: '📚',
+      color: '#7bd88f',
+      icon: '📚',
+    });
+  });
+
+  it('Scenario 13: Leaves workspacesToUpdate empty when existing workspaces match exactly', () => {
+    const localState: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'ws-spots', name: 'Spots', customType: 'text', customValue: 'S', color: '#a8c7fa', tabs: [] },
+      ],
+    };
+
+    const remoteState: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'default',
+      workspaces: [
+        { id: 'ws-spots', name: 'Spots', customType: 'text', customValue: 'S', color: '#a8c7fa', tabs: [] },
+      ],
+    };
+
+    const plan = reconcile(localState, remoteState);
+    expect(plan.workspacesToUpdate).toHaveLength(0);
+  });
 });
+
 

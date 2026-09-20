@@ -1,4 +1,4 @@
-import { SyncPayload, ReconcilePlan, TabItem } from './types.js';
+import { SyncPayload, ReconcilePlan, TabItem, Workspace } from './types.js';
 
 /**
  * Pure, deterministic reconciliation engine.
@@ -17,6 +17,7 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
     tabsToUpdate: [],
     tabsToMove: [],
     workspacesToCreate: [],
+    workspacesToUpdate: [],
     workspacesToRemove: [],
     activeWorkspaceId: remoteState.active_workspace_id || localState.active_workspace_id || 'default',
   };
@@ -28,20 +29,45 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
   }
 
   // 1. Workspace reconciliation
-  const localWsMap = new Map<string, string>();
+  const localWsMap = new Map<string, Workspace>();
   for (const ws of localState.workspaces) {
-    localWsMap.set(ws.id, ws.name);
+    localWsMap.set(ws.id, ws);
   }
 
-  const remoteWsMap = new Map<string, string>();
+  const remoteWsMap = new Map<string, Workspace>();
   for (const ws of remoteState.workspaces) {
-    remoteWsMap.set(ws.id, ws.name);
+    remoteWsMap.set(ws.id, ws);
   }
 
-  // Workspaces to create (present in remote, missing locally)
-  for (const [rId, rName] of remoteWsMap.entries()) {
-    if (!localWsMap.has(rId)) {
-      plan.workspacesToCreate.push({ id: rId, name: rName });
+  // Workspaces to create or update
+  for (const [rId, rWs] of remoteWsMap.entries()) {
+    const lWs = localWsMap.get(rId);
+    if (!lWs) {
+      plan.workspacesToCreate.push({
+        id: rId,
+        name: rWs.name,
+        customType: rWs.customType,
+        customValue: rWs.customValue,
+        color: rWs.color,
+        icon: rWs.icon,
+      });
+    } else {
+      const nameChanged = rWs.name !== lWs.name;
+      const customTypeChanged = rWs.customType !== lWs.customType;
+      const customValueChanged = rWs.customValue !== lWs.customValue;
+      const colorChanged = rWs.color !== lWs.color;
+      const iconChanged = rWs.icon !== lWs.icon;
+
+      if (nameChanged || customTypeChanged || customValueChanged || colorChanged || iconChanged) {
+        plan.workspacesToUpdate.push({
+          id: rId,
+          name: rWs.name,
+          customType: rWs.customType,
+          customValue: rWs.customValue,
+          color: rWs.color,
+          icon: rWs.icon,
+        });
+      }
     }
   }
 

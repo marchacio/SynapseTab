@@ -1,8 +1,17 @@
-import { SyncPayload, Workspace, TabItem, ReconcilePlan } from './types.js';
+import { SyncPayload, Workspace, TabItem, ReconcilePlan, WorkspaceCustomType } from './types.js';
 
 // Default initial workspace
 export const DEFAULT_WORKSPACE_ID = 'default';
 export const DEFAULT_WORKSPACE_NAME = 'Main';
+
+export interface StoredWorkspace {
+  id: string;
+  name: string;
+  customType?: WorkspaceCustomType;
+  customValue?: string;
+  color?: string;
+  icon?: string;
+}
 
 /**
  * Checks whether a URL is a safe, standard web URL that can be passed to browser.tabs.create.
@@ -101,7 +110,7 @@ export class WorkspaceManager {
   /**
    * Retrieves the current stored workspaces metadata from extension storage.
    */
-  static async getStoredWorkspaces(): Promise<{ id: string; name: string }[]> {
+  static async getStoredWorkspaces(): Promise<StoredWorkspace[]> {
     const data = await browser.storage.local.get(['workspaces', 'active_workspace_id']);
     if (Array.isArray(data.workspaces) && data.workspaces.length > 0) {
       return data.workspaces;
@@ -112,7 +121,7 @@ export class WorkspaceManager {
   /**
    * Saves workspaces metadata to extension storage.
    */
-  static async saveStoredWorkspaces(workspaces: { id: string; name: string }[]): Promise<void> {
+  static async saveStoredWorkspaces(workspaces: StoredWorkspace[]): Promise<void> {
     await browser.storage.local.set({ workspaces });
   }
 
@@ -175,6 +184,10 @@ export class WorkspaceManager {
       workspaces.push({
         id: wsId,
         name: stored ? stored.name : wsId,
+        customType: stored?.customType,
+        customValue: stored?.customValue,
+        color: stored?.color,
+        icon: stored?.icon,
         tabs: wsTabs,
       });
     }
@@ -274,7 +287,30 @@ export class WorkspaceManager {
 
     for (const ws of plan.workspacesToCreate) {
       if (!updatedWorkspaces.some((w) => w.id === ws.id)) {
-        updatedWorkspaces.push({ id: ws.id, name: ws.name });
+        updatedWorkspaces.push({
+          id: ws.id,
+          name: ws.name,
+          customType: ws.customType,
+          customValue: ws.customValue,
+          color: ws.color,
+          icon: ws.icon,
+        });
+      }
+    }
+
+    if (plan.workspacesToUpdate && plan.workspacesToUpdate.length > 0) {
+      for (const ws of plan.workspacesToUpdate) {
+        const targetIndex = updatedWorkspaces.findIndex((w) => w.id === ws.id);
+        if (targetIndex !== -1) {
+          updatedWorkspaces[targetIndex] = {
+            id: ws.id,
+            name: ws.name !== undefined ? ws.name : updatedWorkspaces[targetIndex].name,
+            customType: ws.customType,
+            customValue: ws.customValue,
+            color: ws.color,
+            icon: ws.icon,
+          };
+        }
       }
     }
 
@@ -667,7 +703,14 @@ export class WorkspaceManager {
 
       // 7. Save stored workspaces and active workspace ID
       await this.saveStoredWorkspaces(
-        importedWorkspaces.map((w) => ({ id: w.id, name: w.name }))
+        importedWorkspaces.map((w) => ({
+          id: w.id,
+          name: w.name,
+          customType: w.customType,
+          customValue: w.customValue,
+          color: w.color,
+          icon: w.icon,
+        }))
       );
       await this.setActiveWorkspaceId(targetActiveWs);
 
@@ -675,7 +718,7 @@ export class WorkspaceManager {
       // MODE: 'merge'
       const stored = await this.getStoredWorkspaces();
       const existingIds = new Set(stored.map((w) => w.id));
-      const newWorkspacesToStore: { id: string; name: string }[] = [...stored];
+      const newWorkspacesToStore: StoredWorkspace[] = [...stored];
       const tabsToHide: number[] = [];
 
       // Create pinned tabs if not existing
@@ -702,7 +745,14 @@ export class WorkspaceManager {
           wsId = `ws-${crypto.randomUUID().slice(0, 6)}`;
         }
         existingIds.add(wsId);
-        newWorkspacesToStore.push({ id: wsId, name: ws.name });
+        newWorkspacesToStore.push({
+          id: wsId,
+          name: ws.name,
+          customType: ws.customType,
+          customValue: ws.customValue,
+          color: ws.color,
+          icon: ws.icon,
+        });
 
         for (const tab of ws.tabs) {
           const createdId = await createSafeTab(

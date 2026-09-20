@@ -312,6 +312,10 @@ export function importFromStgFormat(rawData: any): StgImportResult {
       workspaces.push({
         id: ws.id || `ws-${crypto.randomUUID().slice(0, 6)}`,
         name: ws.name || 'Workspace',
+        customType: ws.customType,
+        customValue: ws.customValue,
+        color: ws.color,
+        icon: ws.icon,
         tabs,
       });
     }
@@ -339,6 +343,7 @@ export function importFromStgFormat(rawData: any): StgImportResult {
 
     const groupTitle = (group.title || `Group ${gIdx + 1}`).trim();
     const wsId = group.id !== undefined && group.id !== null ? `stg-${group.id}` : `ws-${crypto.randomUUID().slice(0, 6)}`;
+    const groupColor = typeof group.iconColor === 'string' ? group.iconColor : undefined;
 
     const groupTabs: TabItem[] = [];
     if (Array.isArray(group.tabs)) {
@@ -365,6 +370,8 @@ export function importFromStgFormat(rawData: any): StgImportResult {
     workspaces.push({
       id: wsId,
       name: groupTitle,
+      color: groupColor,
+      customType: groupColor ? 'color' : 'default',
       tabs: groupTabs,
     });
   }

@@ -1,0 +1,138 @@
+/**
+ * Android Material 3 (Material You) Design Tokens
+ * SynapseTab Workspace & Tab Synchronization
+ */
+
+:root {
+  /* ==========================================================================
+     Color System (Material 3 Dark Scheme - Expressive Palette)
+     ========================================================================== */
+
+  /* Surfaces & Containers */
+  --md-sys-color-surface: #131318;
+  --md-sys-color-surface-dim: #131318;
+  --md-sys-color-surface-bright: #39383f;
+  --md-sys-color-surface-container-lowest: #0e0e13;
+  --md-sys-color-surface-container-low: #1b1b20;
+  --md-sys-color-surface-container: #1f1f25;
+  --md-sys-color-surface-container-high: #2a292f;
+  --md-sys-color-surface-container-highest: #35343a;
+
+  /* On-Surface & Outlines */
+  --md-sys-color-on-surface: #e4e1e9;
+  --md-sys-color-on-surface-variant: #c8c5d0;
+  --md-sys-color-outline: #918f9a;
+  --md-sys-color-outline-variant: #47464f;
+  --md-sys-color-inverse-surface: #e4e1e9;
+  --md-sys-color-inverse-on-surface: #303036;
+  --md-sys-color-inverse-primary: #6750a4;
+
+  /* Primary Tonal Palette (M3 Lavender / Violet) */
+  --md-sys-color-primary: #d0bcff;
+  --md-sys-color-on-primary: #381e72;
+  --md-sys-color-primary-container: #4f378b;
+  --md-sys-color-on-primary-container: #eaddff;
+
+  /* Secondary Tonal Palette */
+  --md-sys-color-secondary: #cbc2db;
+  --md-sys-color-on-secondary: #332d41;
+  --md-sys-color-secondary-container: #4a4458;
+  --md-sys-color-on-secondary-container: #e8def8;
+
+  /* Tertiary Tonal Palette (M3 Dynamic Teal / Cyan) */
+  --md-sys-color-tertiary: #7cd1ff;
+  --md-sys-color-on-tertiary: #003548;
+  --md-sys-color-tertiary-container: #004d67;
+  --md-sys-color-on-tertiary-container: #c4e8ff;
+
+  /* Semantic Status Roles */
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffdad6;
+
+  --md-sys-color-success: #7bd88f;
+  --md-sys-color-on-success: #003914;
+  --md-sys-color-success-container: #005322;
+  --md-sys-color-on-success-container: #97f5a9;
+
+  --md-sys-color-warning: #ffba28;
+  --md-sys-color-on-warning: #422c00;
+  --md-sys-color-warning-container: #5f4100;
+  --md-sys-color-on-warning-container: #ffdf9e;
+
+  /* ==========================================================================
+     Elevation & Shadows (Material 3 Elevation Levels)
+     ========================================================================== */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.25), 0px 1px 2px 0px rgba(0, 0, 0, 0.40);
+  --md-sys-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.25), 0px 1px 2px 0px rgba(0, 0, 0, 0.40);
+  --md-sys-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.25), 0px 1px 3px 0px rgba(0, 0, 0, 0.40);
+  --md-sys-elevation-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.25), 0px 2px 3px 0px rgba(0, 0, 0, 0.40);
+  --md-sys-elevation-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.25), 0px 4px 4px 0px rgba(0, 0, 0, 0.40);
+
+  /* ==========================================================================
+     Shape Tokens (M3 Corner Radii)
+     ========================================================================== */
+  --md-sys-shape-none: 0px;
+  --md-sys-shape-xs: 4px;
+  --md-sys-shape-sm: 8px;
+  --md-sys-shape-md: 12px;
+  --md-sys-shape-lg: 16px;
+  --md-sys-shape-xl: 28px;
+  --md-sys-shape-full: 9999px;
+
+  /* ==========================================================================
+     Typography Scale
+     ========================================================================== */
+  --md-sys-typescale-font-family: Roboto, 'Google Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --md-sys-typescale-font-mono: ui-monospace, SFMono-Regular, 'Roboto Mono', Menlo, Monaco, Consolas, monospace;
+
+  --md-sys-typescale-title-large: 500 20px/26px var(--md-sys-typescale-font-family);
+  --md-sys-typescale-title-medium: 500 16px/24px var(--md-sys-typescale-font-family);
+  --md-sys-typescale-title-small: 500 14px/20px var(--md-sys-typescale-font-family);
+
+  --md-sys-typescale-body-large: 400 15px/22px var(--md-sys-typescale-font-family);
+  --md-sys-typescale-body-medium: 400 13px/18px var(--md-sys-typescale-font-family);
+  --md-sys-typescale-body-small: 400 12px/16px var(--md-sys-typescale-font-family);
+
+  --md-sys-typescale-label-large: 600 13px/20px var(--md-sys-typescale-font-family);
+  --md-sys-typescale-label-medium: 500 11px/16px var(--md-sys-typescale-font-family);
+  --md-sys-typescale-label-small: 500 10px/14px var(--md-sys-typescale-font-family);
+
+  /* ==========================================================================
+     State Layers & Motion
+     ========================================================================== */
+  --md-sys-state-hover-overlay: rgba(255, 255, 255, 0.08);
+  --md-sys-state-focus-overlay: rgba(255, 255, 255, 0.12);
+  --md-sys-state-pressed-overlay: rgba(255, 255, 255, 0.14);
+
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0.0, 0, 1.0);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+  --md-sys-motion-duration-short: 150ms;
+  --md-sys-motion-duration-medium: 250ms;
+
+  /* ==========================================================================
+     Backward-Compatible Legacy Token Mappings
+     ========================================================================== */
+  --bg-main: var(--md-sys-color-surface);
+  --bg-card: var(--md-sys-color-surface-container);
+  --bg-card-hover: var(--md-sys-color-surface-container-high);
+  --bg-input: var(--md-sys-color-surface-container-lowest);
+  --border-subtle: var(--md-sys-color-outline-variant);
+  --border-focus: var(--md-sys-color-primary);
+  --text-primary: var(--md-sys-color-on-surface);
+  --text-secondary: var(--md-sys-color-on-surface-variant);
+  --text-muted: var(--md-sys-color-outline);
+  --accent-cyan: var(--md-sys-color-tertiary);
+  --accent-purple: var(--md-sys-color-primary);
+  --accent-violet: var(--md-sys-color-primary-container);
+  --accent-gradient: linear-gradient(135deg, var(--md-sys-color-primary-container) 0%, var(--md-sys-color-tertiary-container) 100%);
+  --status-green: var(--md-sys-color-success);
+  --status-yellow: var(--md-sys-color-warning);
+  --status-red: var(--md-sys-color-error);
+  --font-stack: var(--md-sys-typescale-font-family);
+  --radius-sm: var(--md-sys-shape-sm);
+  --radius-md: var(--md-sys-shape-md);
+  --radius-lg: var(--md-sys-shape-lg);
+}

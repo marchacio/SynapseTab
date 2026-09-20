@@ -1,5 +1,6 @@
 import {
   Workspace,
+  WorkspaceCustomType,
   SynapseSettings,
   SyncStatus,
   BackupMetadata,
@@ -14,6 +15,12 @@ let activeWorkspaceId = 'default';
 let currentSettings: SynapseSettings;
 let loadedStgResult: StgImportResult | null = null;
 let rawImportedJson: any = null;
+
+// Modal Editing State
+let editingWorkspace: Workspace | null = null;
+let currentEditType: WorkspaceCustomType = 'emoji';
+let currentEditValue = '🚀';
+let currentEditColor = '#d0bcff';
 
 // DOM Elements - Header & Global
 const statusBadge = document.getElementById('statusBadge') as HTMLElement;
@@ -50,6 +57,28 @@ const pinnedTabsList = document.getElementById('pinnedTabsList') as HTMLElement;
 const activeWorkspaceTitle = document.getElementById('activeWorkspaceTitle') as HTMLElement;
 const tabCountBadge = document.getElementById('tabCountBadge') as HTMLElement;
 const tabsList = document.getElementById('tabsList') as HTMLElement;
+
+// Workspace Edit Modal Elements
+const wsEditModal = document.getElementById('wsEditModal') as HTMLElement;
+const closeWsEditModalBtn = document.getElementById('closeWsEditModalBtn') as HTMLButtonElement;
+const cancelWsEditBtn = document.getElementById('cancelWsEditBtn') as HTMLButtonElement;
+const saveWsEditBtn = document.getElementById('saveWsEditBtn') as HTMLButtonElement;
+const wsEditNameInput = document.getElementById('wsEditNameInput') as HTMLInputElement;
+const wsTypeSegments = document.getElementById('wsTypeSegments') as HTMLElement;
+const wsEmojiSection = document.getElementById('wsEmojiSection') as HTMLElement;
+const wsEmojiInput = document.getElementById('wsEmojiInput') as HTMLInputElement;
+const wsQuickEmojiGrid = document.getElementById('wsQuickEmojiGrid') as HTMLElement;
+const wsTextSection = document.getElementById('wsTextSection') as HTMLElement;
+const wsTagInput = document.getElementById('wsTagInput') as HTMLInputElement;
+const wsColorSection = document.getElementById('wsColorSection') as HTMLElement;
+const wsColorPalette = document.getElementById('wsColorPalette') as HTMLElement;
+const wsPreviewBadge = document.getElementById('wsPreviewBadge') as HTMLElement;
+const wsPreviewName = document.getElementById('wsPreviewName') as HTMLElement;
+const promptDeleteWsBtn = document.getElementById('promptDeleteWsBtn') as HTMLButtonElement;
+const wsDeleteConfirmBox = document.getElementById('wsDeleteConfirmBox') as HTMLElement;
+const wsDeleteConfirmText = document.getElementById('wsDeleteConfirmText') as HTMLElement;
+const confirmDeleteWsBtn = document.getElementById('confirmDeleteWsBtn') as HTMLButtonElement;
+const cancelDeleteWsBtn = document.getElementById('cancelDeleteWsBtn') as HTMLButtonElement;
 
 // Backups elements
 const createBackupBtn = document.getElementById('createBackupBtn') as HTMLButtonElement;
@@ -237,9 +266,13 @@ async function refreshState(): Promise<void> {
   }
 
   // Render Workspaces List
-  currentWorkspaces = storedWorkspaces.map((ws) => ({
+  currentWorkspaces = storedWorkspaces.map((ws: any) => ({
     id: ws.id,
     name: ws.name,
+    customType: ws.customType,
+    customValue: ws.customValue,
+    color: ws.color,
+    icon: ws.icon,
     tabs: (wsMap.get(ws.id) || []).map((t, idx) => ({
       uuid: '',
       url: t.url || '',
@@ -332,7 +365,194 @@ function renderPinnedTabs(pinnedTabs: browser.tabs.Tab[]): void {
 }
 
 /**
- * Renders the workspaces list with switch and delete actions.
+ * Generates an M3 badge element for a workspace based on its customization settings.
+ */
+function createWorkspaceBadge(ws: Workspace): HTMLElement {
+  const badge = document.createElement('span');
+  const customType = ws.customType || (ws.icon ? 'emoji' : ws.color ? 'color' : 'default');
+  const color = ws.color || '#d0bcff';
+
+  if (customType === 'emoji') {
+    badge.className = 'ws-badge ws-badge-emoji';
+    badge.textContent = ws.customValue || ws.icon || '🚀';
+    if (ws.color) {
+      badge.style.backgroundColor = `${color}25`;
+      badge.style.border = `1px solid ${color}60`;
+    }
+  } else if (customType === 'text') {
+    badge.className = 'ws-badge ws-badge-text';
+    const tag = (ws.customValue || ws.name.slice(0, 3) || 'WS').slice(0, 3).toUpperCase();
+    badge.textContent = tag;
+    badge.style.backgroundColor = color;
+  } else if (customType === 'color') {
+    badge.className = 'ws-badge ws-badge-color';
+    badge.style.backgroundColor = color;
+  } else {
+    badge.className = 'ws-badge ws-badge-default';
+    badge.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"></path></svg>`;
+    if (ws.color) {
+      badge.style.color = color;
+      badge.style.border = `1px solid ${color}50`;
+    }
+  }
+  return badge;
+}
+
+/**
+ * Updates the live preview in the workspace edit modal.
+ */
+function updateModalPreview(): void {
+  const name = wsEditNameInput.value.trim() || (editingWorkspace ? editingWorkspace.name : 'Workspace Name');
+  wsPreviewName.textContent = name;
+
+  // Reset preview badge element
+  wsPreviewBadge.className = 'ws-badge';
+  wsPreviewBadge.textContent = '';
+  wsPreviewBadge.innerHTML = '';
+  wsPreviewBadge.style.backgroundColor = '';
+  wsPreviewBadge.style.border = '';
+  wsPreviewBadge.style.color = '';
+
+  const color = currentEditColor || '#d0bcff';
+
+  if (currentEditType === 'emoji') {
+    wsPreviewBadge.classList.add('ws-badge-emoji');
+    wsPreviewBadge.textContent = wsEmojiInput.value.trim() || currentEditValue || '🚀';
+    if (currentEditColor) {
+      wsPreviewBadge.style.backgroundColor = `${color}25`;
+      wsPreviewBadge.style.border = `1px solid ${color}60`;
+    }
+  } else if (currentEditType === 'text') {
+    wsPreviewBadge.classList.add('ws-badge-text');
+    const tag = (wsTagInput.value.trim().slice(0, 3) || name.slice(0, 3) || 'TAG').toUpperCase();
+    wsPreviewBadge.textContent = tag;
+    wsPreviewBadge.style.backgroundColor = color;
+  } else if (currentEditType === 'color') {
+    wsPreviewBadge.classList.add('ws-badge-color');
+    wsPreviewBadge.style.backgroundColor = color;
+  } else {
+    wsPreviewBadge.classList.add('ws-badge-default');
+    wsPreviewBadge.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"></path></svg>`;
+    if (currentEditColor) {
+      wsPreviewBadge.style.color = color;
+      wsPreviewBadge.style.border = `1px solid ${color}50`;
+    }
+  }
+}
+
+/**
+ * Switches the active visual customization type in the modal.
+ */
+function setModalCustomType(type: WorkspaceCustomType): void {
+  currentEditType = type;
+
+  // Update segment buttons active state
+  const segmentBtns = wsTypeSegments.querySelectorAll('.segment-btn');
+  segmentBtns.forEach((btn) => {
+    if (btn.getAttribute('data-type') === type) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // Toggle visible sections based on selected customization type
+  wsEmojiSection.classList.add('hidden');
+  wsTextSection.classList.add('hidden');
+
+  if (type === 'emoji') {
+    wsEmojiSection.classList.remove('hidden');
+    if (!wsEmojiInput.value) {
+      wsEmojiInput.value = currentEditValue || '🚀';
+    }
+    currentEditValue = wsEmojiInput.value;
+  } else if (type === 'text') {
+    wsTextSection.classList.remove('hidden');
+    if (!wsTagInput.value || wsTagInput.value.length > 3) {
+      wsTagInput.value = (wsEditNameInput.value.slice(0, 3) || 'WS').toUpperCase();
+    }
+    currentEditValue = wsTagInput.value;
+  }
+
+  // The color selector is always shown after other fields for customization options
+  // (emoji, 3-char tag, and color only) so color remains editable across styles.
+  if (type === 'default') {
+    wsColorSection.classList.add('hidden');
+  } else {
+    wsColorSection.classList.remove('hidden');
+  }
+
+  updateModalPreview();
+}
+
+/**
+ * Opens the workspace edit & configuration modal for a given workspace.
+ */
+function openWorkspaceEditModal(ws: Workspace, allWorkspaces: Workspace[]): void {
+  editingWorkspace = ws;
+  wsDeleteConfirmBox.classList.add('hidden');
+
+  wsEditNameInput.value = ws.name;
+  currentEditColor = ws.color || '#d0bcff';
+
+  // Highlight active color swatch
+  const swatches = wsColorPalette.querySelectorAll('.color-swatch');
+  swatches.forEach((s) => {
+    if (s.getAttribute('data-color') === currentEditColor) {
+      s.classList.add('active');
+    } else {
+      s.classList.remove('active');
+    }
+  });
+
+  // Determine initial visual type
+  const type: WorkspaceCustomType = ws.customType || (ws.icon ? 'emoji' : ws.color ? 'color' : 'default');
+  currentEditValue = ws.customValue || ws.icon || (type === 'text' ? ws.name.slice(0, 3).toUpperCase() : (type === 'emoji' ? '🚀' : ''));
+
+  if (type === 'emoji') {
+    wsEmojiInput.value = currentEditValue || '🚀';
+  } else if (type === 'text') {
+    wsTagInput.value = currentEditValue || ws.name.slice(0, 3).toUpperCase();
+  }
+
+  // Highlight active emoji in grid if matching
+  const emojiVal = wsEmojiInput.value || currentEditValue;
+  const emojiBtns = wsQuickEmojiGrid.querySelectorAll('.emoji-btn');
+  emojiBtns.forEach((b) => {
+    if (b.getAttribute('data-emoji') === emojiVal) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+
+  setModalCustomType(type);
+
+  // Disable delete button if only 1 workspace exists
+  if (allWorkspaces.length <= 1) {
+    promptDeleteWsBtn.disabled = true;
+    promptDeleteWsBtn.title = 'Cannot delete the only remaining workspace';
+    promptDeleteWsBtn.style.opacity = '0.35';
+  } else {
+    promptDeleteWsBtn.disabled = false;
+    promptDeleteWsBtn.title = 'Delete workspace';
+    promptDeleteWsBtn.style.opacity = '1';
+  }
+
+  wsEditModal.classList.remove('hidden');
+  wsEditNameInput.focus();
+}
+
+/**
+ * Closes the workspace edit modal.
+ */
+function closeWorkspaceEditModal(): void {
+  wsEditModal.classList.add('hidden');
+  editingWorkspace = null;
+}
+
+/**
+ * Renders the workspaces list with visual customization badges and an edit button.
  */
 function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
   workspacesList.replaceChildren();
@@ -344,20 +564,26 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
     const info = document.createElement('div');
     info.className = 'workspace-info';
 
+    // 1. Workspace custom badge
+    const badge = createWorkspaceBadge(ws);
+    info.appendChild(badge);
+
+    // 2. Workspace name
     const name = document.createElement('span');
     name.className = 'ws-name';
     name.textContent = ws.name;
+    info.appendChild(name);
 
+    // 3. Tabs count badge
     const count = document.createElement('span');
     count.className = 'ws-tabs-count';
     const tabCount = ws.tabs ? ws.tabs.length : 0;
     count.textContent = `(${tabCount})`;
-
-    info.appendChild(name);
     info.appendChild(count);
 
     item.appendChild(info);
 
+    // Click on item switches workspace
     item.addEventListener('click', async () => {
       if (ws.id !== activeId) {
         await browser.runtime.sendMessage({
@@ -368,38 +594,31 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
       }
     });
 
-    if (workspaces.length > 1) {
-      const actions = document.createElement('div');
-      actions.className = 'ws-actions';
+    // 4. Edit action icon button
+    const actions = document.createElement('div');
+    actions.className = 'ws-actions';
 
-      const delBtn = document.createElement('button');
-      delBtn.className = 'ws-del-btn';
-      delBtn.innerHTML = '&times;';
-      delBtn.title = `Delete workspace "${ws.name}"`;
+    const editBtn = document.createElement('button');
+    editBtn.className = 'ws-edit-btn';
+    editBtn.title = `Configure workspace "${ws.name}"`;
+    editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
 
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm(`Delete workspace "${ws.name}" and close all its tabs?`)) {
-          await browser.runtime.sendMessage({
-            type: 'DELETE_WORKSPACE',
-            workspaceId: ws.id,
-          });
-          await refreshState();
-        }
-      });
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openWorkspaceEditModal(ws, workspaces);
+    });
 
-      actions.appendChild(delBtn);
-      item.appendChild(actions);
-    }
+    actions.appendChild(editBtn);
+    item.appendChild(actions);
 
     workspacesList.appendChild(item);
   }
 }
 
 /**
- * Renders active tabs in current workspace with pin toggle and move actions.
+ * Renders active tabs in current workspace as clean clickable list items (without action buttons).
  */
-function renderTabsList(tabs: any[], allWorkspaces: Workspace[]): void {
+function renderTabsList(tabs: any[], _allWorkspaces: Workspace[]): void {
   tabsList.replaceChildren();
 
   if (tabs.length === 0) {
@@ -415,10 +634,10 @@ function renderTabsList(tabs: any[], allWorkspaces: Workspace[]): void {
   for (const tab of tabs) {
     const row = document.createElement('div');
     row.className = 'tab-row';
+    row.style.cursor = 'pointer';
 
     const info = document.createElement('div');
     info.className = 'tab-info';
-    info.style.cursor = 'pointer';
 
     const img = document.createElement('img');
     img.className = 'tab-favicon';
@@ -434,80 +653,15 @@ function renderTabsList(tabs: any[], allWorkspaces: Workspace[]): void {
 
     info.appendChild(img);
     info.appendChild(title);
+    row.appendChild(info);
 
-    info.addEventListener('click', async () => {
+    row.addEventListener('click', async () => {
       if (tab.localTabId !== undefined) {
         await browser.tabs.update(tab.localTabId, { active: true });
         window.close();
       }
     });
 
-    const actions = document.createElement('div');
-    actions.className = 'tab-actions';
-
-    // Pin button
-    const pinBtn = document.createElement('button');
-    pinBtn.className = `tab-pin-btn ${tab.pinned ? 'pinned' : ''}`;
-    pinBtn.title = tab.pinned ? 'Unpin tab' : 'Pin tab (Global)';
-    pinBtn.innerHTML = '📌';
-    pinBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (tab.localTabId !== undefined) {
-        await browser.runtime.sendMessage({
-          type: 'TOGGLE_PIN_TAB',
-          tabId: tab.localTabId,
-        });
-        await refreshState();
-      }
-    });
-    actions.appendChild(pinBtn);
-
-    // Move to other workspace selector
-    if (allWorkspaces.length > 1) {
-      const select = document.createElement('select');
-      select.className = 'tab-move-select';
-      select.title = 'Move tab to another workspace';
-
-      for (const ws of allWorkspaces) {
-        const opt = document.createElement('option');
-        opt.value = ws.id;
-        opt.textContent = ws.name;
-        opt.selected = ws.id === activeWorkspaceId;
-        select.appendChild(opt);
-      }
-
-      select.addEventListener('change', async (e) => {
-        e.stopPropagation();
-        const targetWsId = select.value;
-        if (targetWsId !== activeWorkspaceId && tab.localTabId !== undefined) {
-          await browser.runtime.sendMessage({
-            type: 'MOVE_TAB_WORKSPACE',
-            tabId: tab.localTabId,
-            targetWorkspaceId: targetWsId,
-          });
-          await refreshState();
-        }
-      });
-
-      actions.appendChild(select);
-    }
-
-    // Close button
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'tab-close-btn';
-    closeBtn.innerHTML = '&times;';
-    closeBtn.title = 'Close tab';
-    closeBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (tab.localTabId !== undefined) {
-        await browser.tabs.remove(tab.localTabId);
-        await refreshState();
-      }
-    });
-    actions.appendChild(closeBtn);
-
-    row.appendChild(info);
-    row.appendChild(actions);
     tabsList.appendChild(row);
   }
 }
@@ -1106,6 +1260,156 @@ newWorkspaceInput.addEventListener('keydown', (e) => {
   }
 });
 
+// Workspace Edit Modal Event Listeners
+closeWsEditModalBtn?.addEventListener('click', () => {
+  closeWorkspaceEditModal();
+});
+
+cancelWsEditBtn?.addEventListener('click', () => {
+  closeWorkspaceEditModal();
+});
+
+wsEditModal?.addEventListener('click', (e) => {
+  if (e.target === wsEditModal) {
+    closeWorkspaceEditModal();
+  }
+});
+
+wsEditNameInput?.addEventListener('input', () => {
+  updateModalPreview();
+});
+
+wsTypeSegments?.addEventListener('click', (e) => {
+  const target = (e.target as HTMLElement).closest('.segment-btn');
+  if (target) {
+    const type = target.getAttribute('data-type') as WorkspaceCustomType;
+    if (type) {
+      setModalCustomType(type);
+    }
+  }
+});
+
+wsEmojiInput?.addEventListener('input', () => {
+  currentEditValue = wsEmojiInput.value.trim() || '🚀';
+  const emojiBtns = wsQuickEmojiGrid.querySelectorAll('.emoji-btn');
+  emojiBtns.forEach((b) => {
+    if (b.getAttribute('data-emoji') === currentEditValue) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+  updateModalPreview();
+});
+
+wsQuickEmojiGrid?.addEventListener('click', (e) => {
+  const target = (e.target as HTMLElement).closest('.emoji-btn');
+  if (target) {
+    const emoji = target.getAttribute('data-emoji');
+    if (emoji) {
+      currentEditValue = emoji;
+      wsEmojiInput.value = emoji;
+      wsQuickEmojiGrid.querySelectorAll('.emoji-btn').forEach((b) => b.classList.remove('active'));
+      target.classList.add('active');
+      updateModalPreview();
+    }
+  }
+});
+
+wsTagInput?.addEventListener('input', () => {
+  currentEditValue = wsTagInput.value.slice(0, 3).toUpperCase();
+  wsTagInput.value = currentEditValue;
+  updateModalPreview();
+});
+
+wsColorPalette?.addEventListener('click', (e) => {
+  const target = (e.target as HTMLElement).closest('.color-swatch');
+  if (target) {
+    const color = target.getAttribute('data-color');
+    if (color) {
+      currentEditColor = color;
+      wsColorPalette.querySelectorAll('.color-swatch').forEach((s) => s.classList.remove('active'));
+      target.classList.add('active');
+      updateModalPreview();
+    }
+  }
+});
+
+saveWsEditBtn?.addEventListener('click', async () => {
+  if (!editingWorkspace) return;
+
+  const newName = wsEditNameInput.value.trim() || editingWorkspace.name;
+  let customVal: string | undefined = undefined;
+
+  if (currentEditType === 'text') {
+    customVal = (wsTagInput.value.trim().slice(0, 3) || newName.slice(0, 3)).toUpperCase();
+  } else if (currentEditType === 'emoji') {
+    customVal = wsEmojiInput.value.trim() || '🚀';
+  } else if (currentEditType === 'color') {
+    customVal = currentEditColor;
+  } else {
+    customVal = undefined;
+  }
+
+  const icon = currentEditType === 'emoji' ? customVal : undefined;
+
+  saveWsEditBtn.disabled = true;
+  saveWsEditBtn.textContent = 'Saving...';
+
+  try {
+    await browser.runtime.sendMessage({
+      type: 'UPDATE_WORKSPACE',
+      workspaceId: editingWorkspace.id,
+      name: newName,
+      customType: currentEditType,
+      customValue: customVal,
+      color: currentEditColor,
+      icon: icon,
+    });
+    closeWorkspaceEditModal();
+    await refreshState();
+  } catch (err) {
+    console.error('[Popup] Failed to update workspace:', err);
+  } finally {
+    saveWsEditBtn.disabled = false;
+    saveWsEditBtn.textContent = 'Save Changes';
+  }
+});
+
+promptDeleteWsBtn?.addEventListener('click', () => {
+  if (!editingWorkspace) return;
+  if (currentWorkspaces.length <= 1) return;
+
+  const tabCount = editingWorkspace.tabs ? editingWorkspace.tabs.length : 0;
+  wsDeleteConfirmText.textContent = `Are you sure you want to delete workspace "${editingWorkspace.name}" and close all its ${tabCount} tab${tabCount === 1 ? '' : 's'}?`;
+  wsDeleteConfirmBox.classList.remove('hidden');
+});
+
+cancelDeleteWsBtn?.addEventListener('click', () => {
+  wsDeleteConfirmBox.classList.add('hidden');
+});
+
+confirmDeleteWsBtn?.addEventListener('click', async () => {
+  if (!editingWorkspace) return;
+
+  confirmDeleteWsBtn.disabled = true;
+  confirmDeleteWsBtn.textContent = 'Deleting...';
+
+  try {
+    await browser.runtime.sendMessage({
+      type: 'DELETE_WORKSPACE',
+      workspaceId: editingWorkspace.id,
+    });
+    closeWorkspaceEditModal();
+    await refreshState();
+  } catch (err) {
+    console.error('[Popup] Failed to delete workspace:', err);
+  } finally {
+    confirmDeleteWsBtn.disabled = false;
+    confirmDeleteWsBtn.textContent = 'Confirm Delete';
+  }
+});
+
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -1125,3 +1429,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAndDisplaySettings();
   await refreshState();
 });
+
+// Reactively update popup UI when remote sync or background updates modify storage
+browser.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local') {
+    if (changes.workspaces || changes.sync_status || changes.active_workspace_id) {
+      refreshState();
+    }
+  }
+});
+
