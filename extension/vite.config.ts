@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { copyFileSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'fs';
+import { copyFileSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync } from 'fs';
 
 export default defineConfig({
   base: './',
@@ -46,10 +46,9 @@ export default defineConfig({
           if (!existsSync('dist/icons')) {
             mkdirSync('dist/icons', { recursive: true });
           }
-          for (const icon of ['icon-48.png', 'icon-96.png']) {
-            if (existsSync(`icons/${icon}`)) {
-              copyFileSync(`icons/${icon}`, `dist/icons/${icon}`);
-            }
+          const iconFiles = readdirSync('icons');
+          for (const icon of iconFiles) {
+            copyFileSync(`icons/${icon}`, `dist/icons/${icon}`);
           }
         }
 
