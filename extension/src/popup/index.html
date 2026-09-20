@@ -347,13 +347,13 @@
             <input type="text" id="wsEditNameInput" class="styled-input" placeholder="e.g. Work, Research, Dev..." maxlength="32">
           </div>
 
-          <!-- Customization Type Selector (Emoji / 3-Char Tag / Color Box / Default) -->
+          <!-- Customization Type Selector (Emoji / 3-Char Tag / Color Only / Default) -->
           <div class="form-group">
             <label>Visual Badge</label>
             <div class="segmented-control" id="wsTypeSegments">
               <button type="button" class="segment-btn active" data-type="emoji">Emoji</button>
               <button type="button" class="segment-btn" data-type="text">3-Char Tag</button>
-              <button type="button" class="segment-btn" data-type="color">Color Box</button>
+              <button type="button" class="segment-btn" data-type="color">Color Only</button>
               <button type="button" class="segment-btn" data-type="default">Default</button>
             </div>
           </div>
@@ -384,7 +384,7 @@
             <input type="text" id="wsTagInput" class="styled-input" placeholder="e.g. NAV, DEV, DOC..." maxlength="3" style="text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">
           </div>
 
-          <!-- Section: Color Swatch Picker (Visible for all visual badge types) -->
+          <!-- Section: Color Swatch Picker (Always shown after customization fields) -->
           <div id="wsColorSection" class="form-group">
             <label>Accent Color</label>
             <div class="color-palette" id="wsColorPalette">

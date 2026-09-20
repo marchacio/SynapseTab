@@ -1271,3 +1271,9 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Generic Hidden Utility */
+.hidden {
+  display: none !important;
+}
+

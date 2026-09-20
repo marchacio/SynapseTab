@@ -51,6 +51,14 @@ export interface ReconcilePlan {
     color?: string;
     icon?: string;
   }>;
+  workspacesToUpdate: Array<{
+    id: string;
+    name?: string;
+    customType?: WorkspaceCustomType;
+    customValue?: string;
+    color?: string;
+    icon?: string;
+  }>;
   workspacesToRemove: Array<{ id: string }>;
   activeWorkspaceId: string;
 }

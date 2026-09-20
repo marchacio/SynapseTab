@@ -298,6 +298,22 @@ export class WorkspaceManager {
       }
     }
 
+    if (plan.workspacesToUpdate && plan.workspacesToUpdate.length > 0) {
+      for (const ws of plan.workspacesToUpdate) {
+        const targetIndex = updatedWorkspaces.findIndex((w) => w.id === ws.id);
+        if (targetIndex !== -1) {
+          updatedWorkspaces[targetIndex] = {
+            id: ws.id,
+            name: ws.name !== undefined ? ws.name : updatedWorkspaces[targetIndex].name,
+            customType: ws.customType,
+            customValue: ws.customValue,
+            color: ws.color,
+            icon: ws.icon,
+          };
+        }
+      }
+    }
+
     for (const ws of plan.workspacesToRemove) {
       updatedWorkspaces = updatedWorkspaces.filter((w) => w.id !== ws.id);
     }

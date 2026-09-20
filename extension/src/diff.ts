@@ -17,6 +17,7 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
     tabsToUpdate: [],
     tabsToMove: [],
     workspacesToCreate: [],
+    workspacesToUpdate: [],
     workspacesToRemove: [],
     activeWorkspaceId: remoteState.active_workspace_id || localState.active_workspace_id || 'default',
   };
@@ -38,9 +39,10 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
     remoteWsMap.set(ws.id, ws);
   }
 
-  // Workspaces to create (present in remote, missing locally)
+  // Workspaces to create or update
   for (const [rId, rWs] of remoteWsMap.entries()) {
-    if (!localWsMap.has(rId)) {
+    const lWs = localWsMap.get(rId);
+    if (!lWs) {
       plan.workspacesToCreate.push({
         id: rId,
         name: rWs.name,
@@ -49,6 +51,23 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
         color: rWs.color,
         icon: rWs.icon,
       });
+    } else {
+      const nameChanged = rWs.name !== lWs.name;
+      const customTypeChanged = rWs.customType !== lWs.customType;
+      const customValueChanged = rWs.customValue !== lWs.customValue;
+      const colorChanged = rWs.color !== lWs.color;
+      const iconChanged = rWs.icon !== lWs.icon;
+
+      if (nameChanged || customTypeChanged || customValueChanged || colorChanged || iconChanged) {
+        plan.workspacesToUpdate.push({
+          id: rId,
+          name: rWs.name,
+          customType: rWs.customType,
+          customValue: rWs.customValue,
+          color: rWs.color,
+          icon: rWs.icon,
+        });
+      }
     }
   }
 

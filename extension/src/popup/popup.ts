@@ -456,12 +456,9 @@ function setModalCustomType(type: WorkspaceCustomType): void {
     }
   });
 
-  // Toggle visible sections: only show the specific visual selector
+  // Toggle visible sections based on selected customization type
   wsEmojiSection.classList.add('hidden');
   wsTextSection.classList.add('hidden');
-
-  // Color selection is ALWAYS visible for all badges
-  wsColorSection.classList.remove('hidden');
 
   if (type === 'emoji') {
     wsEmojiSection.classList.remove('hidden');
@@ -475,6 +472,14 @@ function setModalCustomType(type: WorkspaceCustomType): void {
       wsTagInput.value = (wsEditNameInput.value.slice(0, 3) || 'WS').toUpperCase();
     }
     currentEditValue = wsTagInput.value;
+  }
+
+  // The color selector is always shown after other fields for customization options
+  // (emoji, 3-char tag, and color only) so color remains editable across styles.
+  if (type === 'default') {
+    wsColorSection.classList.add('hidden');
+  } else {
+    wsColorSection.classList.remove('hidden');
   }
 
   updateModalPreview();
@@ -1424,3 +1429,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAndDisplaySettings();
   await refreshState();
 });
+
+// Reactively update popup UI when remote sync or background updates modify storage
+browser.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local') {
+    if (changes.workspaces || changes.sync_status || changes.active_workspace_id) {
+      refreshState();
+    }
+  }
+});
+
