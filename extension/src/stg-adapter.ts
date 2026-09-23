@@ -323,7 +323,7 @@ export function importFromStgFormat(rawData: any): StgImportResult {
     return {
       workspaces,
       pinnedTabs,
-      version: parsed.version || '1.0.0',
+      version: parsed.version || '1.0.1',
       groupCount: workspaces.length,
       tabCount: totalTabs,
       pinnedCount: pinnedTabs.length,

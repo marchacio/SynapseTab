@@ -1,6 +1,6 @@
 {
   "name": "synapsetab-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Ultra-lightweight Fastify backend for SynapseTab",
   "main": "dist/index.js",
   "type": "module",

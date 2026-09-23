@@ -68,22 +68,31 @@ Historical workspace snapshots are backed up directly on the server without clie
 
 ## 3. Local development
 
-See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full concurrency testing scenarios and backup simulation.
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for everything related to local development and testing.
 
 
 ## 4. Production Deployment
 
-### Docker Compose
-Deploy SynapseTab on a home server (in my case Proxmox, but works also with Portainer, Rancher or just Docker) behind a WireGuard VPN or reverse proxy:
+### Self-Hosting (Proxmox, Docker, Portainer)
+Deploy SynapseTab on a home server (e.g. Proxmox VE in an LXC or VM, Portainer, or bare Docker) behind a reverse proxy (Caddy, Nginx Proxy Manager, Traefik) or private VPN (Tailscale, WireGuard):
 
 ```bash
-# 1. Create production environment configuration
-cp .env.example .env
-# Edit .env to set your SYNC_SECRET, BACKUP_INTERVAL, and BACKUP_RETENTION_COPIES
+# 1. Clone repository to your server
+git clone https://github.com/marchacio/SynapseTab.git /opt/SynapseTab
+cd /opt/SynapseTab
 
-# 2. Start the production stack
-docker compose -f deploy/docker-compose.prod.yml up -d
+# 2. Configure production environment
+cp .env.example .env
+# Customize .env, in particular SYNC_SECRET
+
+# 3. Build and start the production stack (Redis + SynapseTab Server)
+docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d --build
+
+# 4. Verify deployment health
+curl http://localhost:8080/api/v1/health
+# Response: {"status":"ok","redis":"connected","timestamp":...}
 ```
+
 
 ### Backend Endpoints
 - `POST /api/v1/sync`: Persists workspace snapshot (Requires `Authorization: Bearer <SYNC_SECRET>`).

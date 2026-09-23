@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SynapseTab</title>
   <link rel="stylesheet" href="./popup.css">
 </head>
+
 <body>
   <div class="app-container">
     <!-- Header -->
@@ -25,16 +27,20 @@
 
       <div class="header-actions">
         <button id="syncNowBtn" class="icon-button" title="Synchronize Now">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"></polyline>
             <polyline points="1 20 1 14 7 14"></polyline>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
           </svg>
         </button>
         <button id="settingsBtn" class="icon-button" title="Open Settings & Manager">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
           </svg>
         </button>
       </div>
@@ -45,13 +51,15 @@
       <!-- Sidebar Navigation (Active in Full Page / Tab View) -->
       <nav id="fullPageNav" class="sidebar-nav">
         <button id="navWorkspaces" class="nav-item active" data-section="workspaces">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"></path>
           </svg>
           <span>Workspaces</span>
         </button>
         <button id="navBackups" class="nav-item" data-section="backups">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
             <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
             <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
@@ -59,7 +67,8 @@
           <span>Server Backups</span>
         </button>
         <button id="navImportExport" class="nav-item" data-section="importExport">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -67,9 +76,12 @@
           <span>Import & Export</span>
         </button>
         <button id="navSettings" class="nav-item" data-section="settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
           </svg>
           <span>Sync Settings</span>
         </button>
@@ -191,11 +203,13 @@
               <span class="badge" id="exportBadge">Ready</span>
             </div>
             <p class="card-desc">
-              Download all workspaces, tab lists, and pinned tabs in standard <strong>Simple Tab Groups v5.3.2</strong> compatible format.
+              Download all workspaces, tab lists, and pinned tabs in standard <strong>Simple Tab Groups v5.3.2</strong>
+              compatible format.
             </p>
             <div class="card-actions">
               <button id="exportStgBtn" class="btn btn-primary btn-block">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -214,13 +228,15 @@
               </div>
             </div>
             <p class="card-desc">
-              Select or paste a <code>.json</code> export from Drive4ik's Simple Tab Groups or SynapseTab to import your workspaces and tabs.
+              Select or paste a <code>.json</code> export from Drive4ik's Simple Tab Groups or SynapseTab to import your
+              workspaces and tabs.
             </p>
 
             <!-- Drop Zone / File Picker as native label -->
             <label for="stgFileInput" id="stgDropZone" class="file-drop-zone">
               <input type="file" id="stgFileInput" accept=".json,application/json" class="file-input-hidden">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
                 <line x1="12" y1="18" x2="12" y2="12"></line>
@@ -234,8 +250,10 @@
               <div class="paste-section-header">
                 <label for="pasteJsonInput"><strong>📋 Or Paste JSON Text Directly:</strong></label>
               </div>
-              <textarea id="pasteJsonInput" class="styled-textarea" rows="4" placeholder="Paste entire STG JSON backup content here (e.g. Ctrl+V)..."></textarea>
-              <button id="parsePastedJsonBtn" class="btn btn-sm btn-secondary btn-block" type="button" style="margin-top: 6px;">Parse Pasted JSON</button>
+              <textarea id="pasteJsonInput" class="styled-textarea" rows="4"
+                placeholder="Paste entire STG JSON backup content here (e.g. Ctrl+V)..."></textarea>
+              <button id="parsePastedJsonBtn" class="btn btn-sm btn-secondary btn-block" type="button"
+                style="margin-top: 6px;">Parse Pasted JSON</button>
             </div>
 
             <!-- Import Preview Box (shown after valid file parsed) -->
@@ -245,8 +263,8 @@
                 <span class="badge" id="previewVersionBadge">STG 5.3.2</span>
               </div>
               <div class="preview-stats">
-                <span id="previewWsCount">0 workspaces</span> • 
-                <span id="previewPinnedCount">0 pinned</span> • 
+                <span id="previewWsCount">0 workspaces</span> •
+                <span id="previewPinnedCount">0 pinned</span> •
                 <span id="previewTabsCount">0 total tabs</span>
               </div>
               <div class="groups-chips-list" id="previewGroupsChips">
@@ -291,7 +309,7 @@
                 <span class="card-title">Server Connection</span>
               </div>
             </div>
-            
+
             <div class="form-group">
               <label for="settingBackendUrl">Backend Server URL</label>
               <input type="url" id="settingBackendUrl" placeholder="http://localhost:8080" class="styled-input">
@@ -326,7 +344,7 @@
     <!-- Footer -->
     <footer class="footer">
       <span id="lastSyncedText">Not yet synced</span>
-      <span class="version-tag">v1.0.0</span>
+      <span class="version-tag">v1.0.1</span>
     </footer>
 
     <!-- Workspace Edit & Customization Modal -->
@@ -341,7 +359,8 @@
           <!-- Workspace Title / Name -->
           <div class="form-group">
             <label for="wsEditNameInput">Workspace Title</label>
-            <input type="text" id="wsEditNameInput" class="styled-input" placeholder="e.g. Work, Research, Dev..." maxlength="32">
+            <input type="text" id="wsEditNameInput" class="styled-input" placeholder="e.g. Work, Research, Dev..."
+              maxlength="32">
           </div>
 
           <!-- Customization Type Selector (Emoji / 3-Char Tag / Color Only / Default) -->
@@ -358,7 +377,8 @@
           <!-- Section: Emoji Selection -->
           <div id="wsEmojiSection" class="form-group">
             <label for="wsEmojiInput">Emoji Character</label>
-            <input type="text" id="wsEmojiInput" class="styled-input" placeholder="Type or pick an emoji..." maxlength="4">
+            <input type="text" id="wsEmojiInput" class="styled-input" placeholder="Type or pick an emoji..."
+              maxlength="4">
             <div class="emoji-grid" id="wsQuickEmojiGrid">
               <button type="button" class="emoji-btn" data-emoji="🚀">🚀</button>
               <button type="button" class="emoji-btn" data-emoji="💻">💻</button>
@@ -378,21 +398,30 @@
           <!-- Section: 3-Character Text Tag -->
           <div id="wsTextSection" class="form-group hidden">
             <label for="wsTagInput">3-Letter Abbreviation</label>
-            <input type="text" id="wsTagInput" class="styled-input" placeholder="e.g. NAV, DEV, DOC..." maxlength="3" style="text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">
+            <input type="text" id="wsTagInput" class="styled-input" placeholder="e.g. NAV, DEV, DOC..." maxlength="3"
+              style="text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">
           </div>
 
           <!-- Section: Color Swatch Picker (Always shown after customization fields) -->
           <div id="wsColorSection" class="form-group">
             <label>Accent Color</label>
             <div class="color-palette" id="wsColorPalette">
-              <button type="button" class="color-swatch active" data-color="#d0bcff" style="background-color: #d0bcff;" title="Lavender"></button>
-              <button type="button" class="color-swatch" data-color="#a8c7fa" style="background-color: #a8c7fa;" title="Electric Blue"></button>
-              <button type="button" class="color-swatch" data-color="#7cd1ff" style="background-color: #7cd1ff;" title="Teal Cyan"></button>
-              <button type="button" class="color-swatch" data-color="#7bd88f" style="background-color: #7bd88f;" title="Emerald Green"></button>
-              <button type="button" class="color-swatch" data-color="#ffba28" style="background-color: #ffba28;" title="Amber Yellow"></button>
-              <button type="button" class="color-swatch" data-color="#ffb4ab" style="background-color: #ffb4ab;" title="Coral Red"></button>
-              <button type="button" class="color-swatch" data-color="#efb8c8" style="background-color: #efb8c8;" title="Rose Pink"></button>
-              <button type="button" class="color-swatch" data-color="#bec6dc" style="background-color: #bec6dc;" title="Slate"></button>
+              <button type="button" class="color-swatch active" data-color="#d0bcff" style="background-color: #d0bcff;"
+                title="Lavender"></button>
+              <button type="button" class="color-swatch" data-color="#a8c7fa" style="background-color: #a8c7fa;"
+                title="Electric Blue"></button>
+              <button type="button" class="color-swatch" data-color="#7cd1ff" style="background-color: #7cd1ff;"
+                title="Teal Cyan"></button>
+              <button type="button" class="color-swatch" data-color="#7bd88f" style="background-color: #7bd88f;"
+                title="Emerald Green"></button>
+              <button type="button" class="color-swatch" data-color="#ffba28" style="background-color: #ffba28;"
+                title="Amber Yellow"></button>
+              <button type="button" class="color-swatch" data-color="#ffb4ab" style="background-color: #ffb4ab;"
+                title="Coral Red"></button>
+              <button type="button" class="color-swatch" data-color="#efb8c8" style="background-color: #efb8c8;"
+                title="Rose Pink"></button>
+              <button type="button" class="color-swatch" data-color="#bec6dc" style="background-color: #bec6dc;"
+                title="Slate"></button>
             </div>
           </div>
 
@@ -433,4 +462,5 @@
 
   <script type="module" src="./popup.ts"></script>
 </body>
+
 </html>

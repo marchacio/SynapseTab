@@ -1,6 +1,6 @@
 {
   "name": "synapsetab-monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Ultra-lightweight, self-hosted tab and workspace synchronization for Mozilla Firefox",
   "private": true,
   "type": "module",

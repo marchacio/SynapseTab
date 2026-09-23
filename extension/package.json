@@ -1,6 +1,6 @@
 {
   "name": "synapsetab-extension",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Mozilla Firefox MV3 extension for SynapseTab",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "lint:web-ext": "web-ext lint --source-dir=dist",
-    "package": "web-ext build --source-dir=dist --artifacts-dir=../web-ext-artifacts --overwrite-dest"
+    "package": "npm run build && web-ext build --source-dir=dist --artifacts-dir=../web-ext-artifacts --overwrite-dest"
   },
   "devDependencies": {
     "@types/firefox-webext-browser": "^120.0.5",
