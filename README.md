@@ -15,7 +15,6 @@
   <a href="https://ghcr.io"><img src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-blue" alt="Docker Multi-Arch"></a>
 </p>
 
----
 
 > Note: This project is currently under development. You’re welcome to try it out, modify it, improve it and report any bugs on the dedicated Issues page, or open a Pull Request – thank you very much for your help!
 This project was created to meet my own needs, but as I’m a strong believer in the open-source community, I thought it would be useful and helpful to make it public and available to everyone 😄
@@ -31,8 +30,6 @@ SynapseTab is an Open-Source tab and workspace synchronization system engineered
 
 TODO add gif showing a cool demo of SynapseTab
 
-
----
 
 ## 2. Core Architecture
 
@@ -56,7 +53,7 @@ browser.tabs.create({ url: remoteTab.url, discarded: true, active: false })
 This guarantees **zero network requests** and **zero RAM consumption** until a tab is explicitly brought to focus by the user.
 
 ### 5. Reconciliation algorithm
-State reconciliation is computed via a `diff` algorithm that produces a plan of actions to apply to the local state to match the remote state.
+State reconciliation is computed via a `diff` algorithm that produces a plan of actions to apply to the local state to match the remote state. See [docs/LOGIC.md](docs/LOGIC.md) for full architectural details on bootstrap precedence, echo suppression locks, and conflict resolution.
 
 
 ### 6. Durable Persistence Layer
@@ -68,15 +65,11 @@ Historical workspace snapshots are backed up directly on the server without clie
 - **Intelligent Retention Pruning**: Configurable retention limits (`maxCopies`, default 10) automatically prune older copies upon new snapshot creation.
 - **Visual Management UI**: Dedicated popup panel with direct controls to explore snapshot workspaces/tabs, restore past states with immediate client reconciliation, or delete backups.
 
----
-
----
 
 ## 3. Local development
 
 See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full concurrency testing scenarios and backup simulation.
 
----
 
 ## 4. Production Deployment
 
@@ -105,8 +98,6 @@ docker compose -f deploy/docker-compose.prod.yml up -d
 - `POST /api/v1/backups/config`: Updates backup schedule and retention policy.
 
 
----
-
 ## 5. Automated testing suite
 
 The codebase enforces strict test-driven development:
@@ -124,8 +115,6 @@ npm run test:server
 # Validate Firefox MV3 compliance
 npm run lint:web-ext
 ```
-
----
 
 ## 6. License
 

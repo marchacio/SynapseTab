@@ -93,8 +93,9 @@ async function pushSync(): Promise<void> {
 
 /**
  * Pulls remote state from backend and executes reconciliation.
+ * @param isInitial Whether this is the bootstrap pull on extension/browser startup.
  */
-async function pullSync(): Promise<void> {
+async function pullSync(isInitial: boolean = false): Promise<void> {
   if (isApplyingRemoteDiff) return;
 
   try {
@@ -109,23 +110,42 @@ async function pullSync(): Promise<void> {
 
     const localState = await WorkspaceManager.captureLocalState(settings.clientId);
 
-    // If remote state was emitted by this very client, we already have it
-    if (remoteState.client_id === settings.clientId) {
+    // If not initial startup, and remote state was emitted by this very client, we already have it
+    if (!isInitial && remoteState.client_id === settings.clientId) {
       return;
     }
 
     // Compute execution plan
     const plan = reconcile(localState, remoteState);
 
+    // If the plan has no changes, nothing to do
+    const hasChanges =
+      plan.tabsToCreate.length > 0 ||
+      plan.tabsToClose.length > 0 ||
+      plan.tabsToUpdate.length > 0 ||
+      plan.tabsToMove.length > 0 ||
+      plan.workspacesToCreate.length > 0 ||
+      plan.workspacesToUpdate.length > 0 ||
+      plan.workspacesToRemove.length > 0 ||
+      (plan.activeWorkspaceId && plan.activeWorkspaceId !== localState.active_workspace_id);
+
+    if (!hasChanges) {
+      await updateStatus({
+        state: 'synced',
+        lastSyncTime: Date.now(),
+        errorMessage: null,
+      });
+      return;
+    }
+
     // Apply plan with lock to avoid listener loops
     isApplyingRemoteDiff = true;
     try {
       await WorkspaceManager.applyExecutionPlan(plan);
     } finally {
-      // Small timeout to allow tab events to settle
-      setTimeout(() => {
-        isApplyingRemoteDiff = false;
-      }, 600);
+      // Allow tab events and DOM to settle before releasing lock
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      isApplyingRemoteDiff = false;
     }
 
     await updateStatus({
@@ -140,6 +160,7 @@ async function pullSync(): Promise<void> {
       state: 'error',
       errorMessage: err.message || 'Pull sync failed',
     });
+    throw err;
   }
 }
 
@@ -206,7 +227,7 @@ function setupMessageListener(): void {
           return currentStatus;
 
         case 'SYNC_NOW':
-          await pullSync();
+          await pullSync(true);
           return currentStatus;
 
       case 'SWITCH_WORKSPACE': {
@@ -491,18 +512,20 @@ async function init(): Promise<void> {
   // Initialize and assign UUIDs and workspaces for all existing tabs
   await WorkspaceManager.initializeExistingTabs();
 
-  setupTabListeners();
   setupAlarms();
   setupMessageListener();
 
-  // Initial pull sync
+  // Initial pull sync - must reconcile against remote state even if client_id matches
   try {
-    await pullSync();
+    await pullSync(true);
+    hasCompletedInitialPull = true;
   } catch (err) {
     console.error('[SynapseTab] Initial pull error:', err);
-  } finally {
-    hasCompletedInitialPull = true;
+    // Note: hasCompletedInitialPull remains false if initial pull fails, protecting remote state
   }
+
+  // Register tab listeners ONLY after initial pull has completed and settled
+  setupTabListeners();
 }
 
 init();

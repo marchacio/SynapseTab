@@ -94,13 +94,26 @@ body {
 .logo-mark {
   width: 32px;
   height: 32px;
-  border-radius: var(--md-sys-shape-md);
-  background: linear-gradient(135deg, var(--md-sys-color-primary-container) 0%, var(--md-sys-color-tertiary-container) 100%);
+  border-radius: var(--md-sys-shape-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--md-sys-color-on-primary-container);
-  box-shadow: 0 0 16px rgba(208, 188, 255, 0.25);
+  flex-shrink: 0;
+  box-shadow: 0 0 16px rgba(208, 188, 255, 0.2);
+}
+
+.logo-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
 }
 
 .brand-text h1 {

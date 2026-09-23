@@ -340,17 +340,9 @@ export class WorkspaceManager {
         }
 
         try {
-          if (canDiscard) {
-            newTab = await browser.tabs.create({
-              ...createProps,
-              discarded: true,
-              title: tab.title || undefined,
-            });
-          } else {
-            newTab = await browser.tabs.create(createProps);
-          }
+          newTab = await browser.tabs.create(createProps);
         } catch {
-          // Fallback without discarded or restricted URL
+          // Fallback without restricted URL
           newTab = await browser.tabs.create({
             active: false,
             pinned: tab.pinned,
@@ -359,6 +351,11 @@ export class WorkspaceManager {
         }
 
         if (newTab.id !== undefined) {
+          if (canDiscard) {
+            try {
+              await browser.tabs.discard(newTab.id);
+            } catch {}
+          }
           await browser.sessions.setTabValue(newTab.id, 'tab_uuid', tab.uuid);
           await this.setTabWorkspaceId(newTab.id, workspaceId);
 
@@ -556,42 +553,31 @@ export class WorkspaceManager {
 
       let newTab: browser.tabs.Tab | undefined;
 
-      if (canDiscard) {
+      try {
+        newTab = await browser.tabs.create({
+          url: safeUrl === 'about:newtab' ? undefined : safeUrl,
+          active: isActive,
+          pinned: isPinned,
+        });
+      } catch {
         try {
           newTab = await browser.tabs.create({
-            url: safeUrl,
-            active: false,
-            pinned: isPinned,
-            discarded: true,
-            title: title || undefined,
-          });
-        } catch {
-          // Fallback without discarded
-        }
-      }
-
-      if (!newTab) {
-        try {
-          newTab = await browser.tabs.create({
-            url: safeUrl === 'about:newtab' ? undefined : safeUrl,
             active: isActive,
             pinned: isPinned,
+            url: isHttp ? safeUrl : undefined,
           });
-        } catch {
-          try {
-            newTab = await browser.tabs.create({
-              active: isActive,
-              pinned: isPinned,
-              url: isHttp ? safeUrl : undefined,
-            });
-          } catch (err) {
-            console.warn('[WorkspaceManager] Failed to create tab:', safeUrl, err);
-            return undefined;
-          }
+        } catch (err) {
+          console.warn('[WorkspaceManager] Failed to create tab:', safeUrl, err);
+          return undefined;
         }
       }
 
       if (newTab && newTab.id !== undefined) {
+        if (canDiscard) {
+          try {
+            await browser.tabs.discard(newTab.id);
+          } catch {}
+        }
         await browser.sessions.setTabValue(newTab.id, 'tab_uuid', uuid);
         await this.setTabWorkspaceId(newTab.id, wsId);
         return newTab.id;
