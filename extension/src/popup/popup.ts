@@ -9,6 +9,8 @@ import {
   BackupListResponse,
 } from '../types.js';
 import { importFromStgFormat, StgImportResult } from '../stg-adapter.js';
+import { getContrastingTextColor } from '../theme/tokens.js';
+
 
 let currentWorkspaces: Workspace[] = [];
 let activeWorkspaceId = 'default';
@@ -384,6 +386,7 @@ function createWorkspaceBadge(ws: Workspace): HTMLElement {
     const tag = (ws.customValue || ws.name.slice(0, 3) || 'WS').slice(0, 3).toUpperCase();
     badge.textContent = tag;
     badge.style.backgroundColor = color;
+    badge.style.color = getContrastingTextColor(color);
   } else if (customType === 'color') {
     badge.className = 'ws-badge ws-badge-color';
     badge.style.backgroundColor = color;
@@ -427,6 +430,7 @@ function updateModalPreview(): void {
     const tag = (wsTagInput.value.trim().slice(0, 3) || name.slice(0, 3) || 'TAG').toUpperCase();
     wsPreviewBadge.textContent = tag;
     wsPreviewBadge.style.backgroundColor = color;
+    wsPreviewBadge.style.color = getContrastingTextColor(color);
   } else if (currentEditType === 'color') {
     wsPreviewBadge.classList.add('ws-badge-color');
     wsPreviewBadge.style.backgroundColor = color;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SynapseTab",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Ultra-lightweight, self-hosted tab and workspace synchronization for Mozilla Firefox",
   "browser_specific_settings": {
     "gecko": {
@@ -19,7 +19,8 @@
     "tabHide",
     "sessions",
     "storage",
-    "alarms"
+    "alarms",
+    "menus"
   ],
   "host_permissions": [
     "<all_urls>"

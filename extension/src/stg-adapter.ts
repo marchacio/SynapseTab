@@ -323,7 +323,7 @@ export function importFromStgFormat(rawData: any): StgImportResult {
     return {
       workspaces,
       pinnedTabs,
-      version: parsed.version || '1.0.1',
+      version: parsed.version || '1.0.2',
       groupCount: workspaces.length,
       tabCount: totalTabs,
       pinnedCount: pinnedTabs.length,
@@ -367,11 +367,27 @@ export function importFromStgFormat(rawData: any): StgImportResult {
       }
     }
 
+    const groupIcon = typeof group.iconUrl === 'string' && group.iconUrl.trim().length > 0 ? group.iconUrl.trim() : undefined;
+    let customType: 'emoji' | 'text' | 'color' | 'default' = 'default';
+    let customValue: string | undefined;
+
+    if (group.iconViewType === 'icon' || (groupIcon && !group.iconViewType)) {
+      customType = 'emoji';
+      customValue = groupIcon;
+    } else if (group.iconViewType === 'title') {
+      customType = 'text';
+      customValue = groupTitle.slice(0, 3).toUpperCase();
+    } else if (groupColor) {
+      customType = 'color';
+    }
+
     workspaces.push({
       id: wsId,
       name: groupTitle,
       color: groupColor,
-      customType: groupColor ? 'color' : 'default',
+      icon: groupIcon,
+      customType,
+      customValue,
       tabs: groupTabs,
     });
   }
