@@ -133,8 +133,13 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ==========================================================================
@@ -211,9 +216,20 @@
 }
 
 @keyframes pulse {
-  0% { opacity: 0.3; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); }
-  100% { opacity: 0.3; transform: scale(0.9); }
+  0% {
+    opacity: 0.3;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  100% {
+    opacity: 0.3;
+    transform: scale(0.9);
+  }
 }
 
 /* ==========================================================================
@@ -397,7 +413,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 5px 10px;
   background-color: var(--md-sys-color-surface-container-low);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-md);
@@ -449,9 +465,9 @@
 }
 
 .ws-badge {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
   border-radius: var(--md-sys-shape-sm);
   display: inline-flex;
   align-items: center;
@@ -465,13 +481,13 @@
 }
 
 .ws-badge-emoji {
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   background-color: rgba(255, 255, 255, 0.06);
 }
 
 .ws-badge-text {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -501,9 +517,9 @@
   border: none;
   color: var(--md-sys-color-outline);
   cursor: pointer;
-  padding: 4px;
-  width: 28px;
-  height: 28px;
+  padding: 2px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--md-sys-shape-full);
   display: flex;
   align-items: center;
@@ -1063,6 +1079,7 @@
     opacity: 0;
     transform: scale(0.94) translateY(6px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -1276,4 +1293,3 @@
 .hidden {
   display: none !important;
 }
-
