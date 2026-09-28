@@ -1,72 +1,12 @@
 import { StoredWorkspace, WorkspaceManager } from './workspaces.js';
+import {
+  hslToRgb,
+  getPerceivedBrightness,
+  getContrastingTextColor,
+} from './theme/tokens.js';
 
-/**
- * Computes perceived luminance for a given CSS color string (0 = darkest, 255 = brightest).
- */
-export function getPerceivedBrightness(colorStr?: string): number {
-  if (!colorStr) return 128;
-  const c = colorStr.toLowerCase().trim();
+export { hslToRgb, getPerceivedBrightness, getContrastingTextColor };
 
-  // 1. HSL / HSLA
-  const hslMatch = c.match(/hsla?\(\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)%\s*,\s*([+-]?\d+(?:\.\d+)?)%/);
-  if (hslMatch) {
-    let h = parseFloat(hslMatch[1]) % 360;
-    if (h < 0) h += 360;
-    const s = parseFloat(hslMatch[2]);
-    const l = parseFloat(hslMatch[3]);
-    const [r, g, b] = hslToRgb(h, s, l);
-    return 0.299 * r + 0.587 * g + 0.114 * b;
-  }
-
-  // 2. RGB / RGBA
-  const rgbMatch = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (rgbMatch) {
-    const r = parseInt(rgbMatch[1], 10);
-    const g = parseInt(rgbMatch[2], 10);
-    const b = parseInt(rgbMatch[3], 10);
-    return 0.299 * r + 0.587 * g + 0.114 * b;
-  }
-
-  // 3. Hex
-  if (c.startsWith('#')) {
-    let hex = c.slice(1);
-    if (hex.length === 3 || hex.length === 4) {
-      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-    }
-    if (hex.length >= 6) {
-      const r = parseInt(hex.slice(0, 2), 16);
-      const g = parseInt(hex.slice(2, 4), 16);
-      const b = parseInt(hex.slice(4, 6), 16);
-      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-        return 0.299 * r + 0.587 * g + 0.114 * b;
-      }
-    }
-  }
-
-  if (c === 'black') return 0;
-  if (c === 'white') return 255;
-  if (c === 'yellow' || c === 'gold') return 220;
-  return 128;
-}
-
-/**
- * Converts HSL values to RGB tuple in 0-255 range.
- */
-export function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  s /= 100;
-  l /= 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
-
-/**
- * Determines whether text on a background color should be dark or white for optimal contrast.
- */
-export function getContrastingTextColor(bgColor?: string): string {
-  return getPerceivedBrightness(bgColor) > 140 ? '#131318' : '#ffffff';
-}
 
 function drawRoundedRect(
   ctx: OffscreenCanvasRenderingContext2D,

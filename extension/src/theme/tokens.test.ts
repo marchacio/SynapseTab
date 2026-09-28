@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { M3DarkScheme, M3ShapeTokens, M3ElevationTokens } from './tokens.js';
+import {
+  M3DarkScheme,
+  M3ShapeTokens,
+  M3ElevationTokens,
+  getContrastingTextColor,
+  getPerceivedBrightness,
+  hslToRgb,
+} from './tokens.js';
 
 describe('Material 3 Design Tokens', () => {
   it('defines valid surface and tonal container colors', () => {
@@ -36,4 +43,28 @@ describe('Material 3 Design Tokens', () => {
     expect(M3ElevationTokens.level1).toContain('rgba(0, 0, 0, 0.25)');
     expect(M3ElevationTokens.level3).toContain('rgba(0, 0, 0, 0.25)');
   });
+
+  describe('getContrastingTextColor', () => {
+    it('returns black/dark text for yellow and bright colors', () => {
+      expect(getContrastingTextColor('yellow')).toBe('#131318');
+      expect(getContrastingTextColor('#ffff00')).toBe('#131318');
+      expect(getContrastingTextColor('#ffd700')).toBe('#131318');
+      expect(getContrastingTextColor('white')).toBe('#131318');
+      expect(getContrastingTextColor('#ffffff')).toBe('#131318');
+      expect(getContrastingTextColor('cyan')).toBe('#131318');
+    });
+
+
+    it('returns white text for red, blue, magenta, and dark colors', () => {
+      expect(getContrastingTextColor('red')).toBe('#ffffff');
+      expect(getContrastingTextColor('#ff0000')).toBe('#ffffff');
+      expect(getContrastingTextColor('blue')).toBe('#ffffff');
+      expect(getContrastingTextColor('#0000ff')).toBe('#ffffff');
+      expect(getContrastingTextColor('magenta')).toBe('#ffffff');
+      expect(getContrastingTextColor('#ff00ff')).toBe('#ffffff');
+      expect(getContrastingTextColor('black')).toBe('#ffffff');
+      expect(getContrastingTextColor('#000000')).toBe('#ffffff');
+    });
+  });
 });
+
