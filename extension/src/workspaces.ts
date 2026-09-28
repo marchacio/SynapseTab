@@ -525,6 +525,81 @@ export class WorkspaceManager {
   }
 
   /**
+   * Moves a single tab to a target workspace, adjusting visibility if necessary.
+   */
+  static async moveTabToWorkspace(tabId: number, targetWorkspaceId: string): Promise<void> {
+    return this.moveTabsToWorkspace([tabId], targetWorkspaceId);
+  }
+
+  /**
+   * Moves multiple tabs to a target workspace, ensuring the window remains valid and inactive tabs are hidden.
+   */
+  static async moveTabsToWorkspace(tabIds: number[], targetWorkspaceId: string): Promise<void> {
+    if (tabIds.length === 0) return;
+    const allTabs = await browser.tabs.query({ currentWindow: true });
+
+    // Filter out pinned tabs - pinned tabs reside in global session scope and cannot be hidden
+    const unpinnedTabIds = tabIds.filter((id) => {
+      const t = allTabs.find((tab) => tab.id === id);
+      return t && !t.pinned;
+    });
+
+    if (unpinnedTabIds.length === 0) return;
+    const activeWs = await this.getActiveWorkspaceId();
+
+    for (const tabId of unpinnedTabIds) {
+      await this.setTabWorkspaceId(tabId, targetWorkspaceId);
+    }
+
+    if (targetWorkspaceId !== activeWs) {
+      const targetSet = new Set(unpinnedTabIds);
+      const activeTabToMove = allTabs.find((t) => t.id !== undefined && targetSet.has(t.id) && t.active);
+
+      if (activeTabToMove) {
+        const remainingTab = allTabs.find((t) => t.id !== undefined && !targetSet.has(t.id) && !t.hidden);
+        if (remainingTab && remainingTab.id !== undefined) {
+          await browser.tabs.update(remainingTab.id, { active: true });
+        } else {
+          const newTab = await browser.tabs.create({ active: true, url: 'about:blank' });
+          if (newTab.id !== undefined) {
+            await this.getOrAssignTabUuid(newTab.id);
+            await this.setTabWorkspaceId(newTab.id, activeWs);
+          }
+        }
+      }
+
+      const tabsToHide = unpinnedTabIds;
+
+      if (tabsToHide.length > 0) {
+        try {
+          await browser.tabs.hide(tabsToHide);
+        } catch {
+          for (const id of tabsToHide) {
+            try {
+              await browser.tabs.hide(id);
+            } catch (err) {
+              console.warn(`[WorkspaceManager] Could not hide tab ${id}:`, err);
+            }
+          }
+        }
+      }
+    } else {
+      // If moving into the currently active workspace, ensure tabs are visible
+      const tabsToShow = unpinnedTabIds.filter((id) => {
+        const t = allTabs.find((tab) => tab.id === id);
+        return t && t.hidden;
+      });
+      if (tabsToShow.length > 0) {
+        try {
+          await browser.tabs.show(tabsToShow);
+        } catch (err) {
+          console.warn('[WorkspaceManager] Failed to show moved tabs:', err);
+        }
+      }
+    }
+  }
+
+  /**
    * Imports workspaces and pinned tabs in either 'merge' or 'replace' mode.
    */
   static async importWorkspacesAndTabs(

@@ -19,7 +19,8 @@
     "tabHide",
     "sessions",
     "storage",
-    "alarms"
+    "alarms",
+    "menus"
   ],
   "host_permissions": [
     "<all_urls>"

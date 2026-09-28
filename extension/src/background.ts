@@ -2,6 +2,7 @@ import { SynapseApiClient } from './api.js';
 import { reconcile } from './diff.js';
 import { WorkspaceManager, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
 import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
+import { initContextMenus } from './menus.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace } from './types.js';
 
 const DEBOUNCE_DELAY_MS = 1000;
@@ -344,29 +345,7 @@ function setupMessageListener(): void {
       }
 
       case 'MOVE_TAB_WORKSPACE': {
-        await WorkspaceManager.setTabWorkspaceId(message.tabId, message.targetWorkspaceId);
-        const activeWs = await WorkspaceManager.getActiveWorkspaceId();
-        if (message.targetWorkspaceId !== activeWs) {
-          try {
-            const currentTab = await browser.tabs.get(message.tabId);
-            if (currentTab.active) {
-              const allTabs = await browser.tabs.query({ currentWindow: true });
-              const otherTab = allTabs.find((t) => t.id !== message.tabId && !t.hidden);
-              if (otherTab && otherTab.id) {
-                await browser.tabs.update(otherTab.id, { active: true });
-              } else {
-                const newTab = await browser.tabs.create({ active: true, url: 'about:blank' });
-                if (newTab.id) {
-                  await WorkspaceManager.getOrAssignTabUuid(newTab.id);
-                  await WorkspaceManager.setTabWorkspaceId(newTab.id, activeWs);
-                }
-              }
-            }
-            await browser.tabs.hide(message.tabId);
-          } catch (err) {
-            console.warn('[WorkspaceManager] Failed to hide moved tab:', err);
-          }
-        }
+        await WorkspaceManager.moveTabToWorkspace(message.tabId, message.targetWorkspaceId);
         triggerPushSync();
         return { success: true };
       }
@@ -526,6 +505,9 @@ async function init(): Promise<void> {
 
   // Register tab listeners ONLY after initial pull has completed and settled
   setupTabListeners();
+
+  // Initialize Firefox tab context menus
+  initContextMenus(() => triggerPushSync());
 }
 
 init();
