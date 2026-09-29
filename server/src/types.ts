@@ -28,12 +28,14 @@ export interface SyncPayload {
   updated_at: number;
   active_workspace_id: string;
   workspaces: Workspace[];
+  version?: number;
 }
 
 export interface SyncResponse {
   status: 'ok' | 'error';
   message?: string;
   updated_at?: number;
+  version?: number;
 }
 
 export interface HealthResponse {

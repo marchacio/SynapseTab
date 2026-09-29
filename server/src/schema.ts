@@ -29,6 +29,7 @@ export const SyncPayloadSchema = Type.Object({
   updated_at: Type.Number(),
   active_workspace_id: Type.String(),
   workspaces: Type.Array(WorkspaceSchema),
+  version: Type.Optional(Type.Integer({ minimum: 0 })),
 }, { additionalProperties: false });
 
 export type SyncPayloadType = Static<typeof SyncPayloadSchema>;

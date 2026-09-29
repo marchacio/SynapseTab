@@ -4,6 +4,7 @@ import { WorkspaceManager, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from '
 import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
 import { initContextMenus } from './menus.js';
 import { updateActionIcon } from './action-icon.js';
+import { determineSyncAction } from './sync-action.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace } from './types.js';
 
 const DEBOUNCE_DELAY_MS = 1000;
@@ -23,6 +24,32 @@ let currentStatus: SyncStatus = {
   lastSyncTime: null,
   errorMessage: null,
 };
+
+interface LocalVersionState {
+  version: number;
+  updatedAt: number;
+  hasLocalChanges: boolean;
+}
+
+async function getLocalVersionState(): Promise<LocalVersionState> {
+  const data = await browser.storage.local.get(['local_version_state']);
+  if (data.local_version_state) {
+    return data.local_version_state;
+  }
+  const initial: LocalVersionState = {
+    version: 0,
+    updatedAt: 0,
+    hasLocalChanges: false,
+  };
+  await browser.storage.local.set({ local_version_state: initial });
+  return initial;
+}
+
+async function setLocalVersionState(state: Partial<LocalVersionState>): Promise<void> {
+  const current = await getLocalVersionState();
+  const updated: LocalVersionState = { ...current, ...state };
+  await browser.storage.local.set({ local_version_state: updated });
+}
 
 /**
  * Loads extension configuration from local storage.
@@ -56,6 +83,8 @@ async function triggerPushSync(): Promise<void> {
     return;
   }
 
+  await setLocalVersionState({ hasLocalChanges: true });
+
   if (debounceTimer) {
     clearTimeout(debounceTimer);
   }
@@ -75,15 +104,35 @@ async function pushSync(): Promise<void> {
   try {
     await updateStatus({ state: 'syncing', errorMessage: null });
     const settings = await loadSettings();
-    const localState = await WorkspaceManager.captureLocalState(settings.clientId);
+    const versionState = await getLocalVersionState();
 
-    await SynapseApiClient.pushLocalState(settings, localState);
+    const versionToPush = versionState.hasLocalChanges
+      ? versionState.version + 1
+      : Math.max(versionState.version, 1);
+    const updatedAtToPush = Math.floor(Date.now() / 1000);
+
+    const localState = await WorkspaceManager.captureLocalState(
+      settings.clientId,
+      versionToPush,
+      updatedAtToPush
+    );
+
+    const pushRes = await SynapseApiClient.pushLocalState(settings, localState);
+    const confirmedVersion = pushRes.version ?? versionToPush;
+    const confirmedUpdatedAt = pushRes.updated_at ?? updatedAtToPush;
+
+    await setLocalVersionState({
+      version: confirmedVersion,
+      updatedAt: confirmedUpdatedAt,
+      hasLocalChanges: false,
+    });
+
     await updateStatus({
       state: 'synced',
       lastSyncTime: Date.now(),
       errorMessage: null,
     });
-    console.log('[SynapseTab] Local state pushed successfully.');
+    console.log(`[SynapseTab] Local state pushed successfully (v${confirmedVersion}).`);
   } catch (err: any) {
     console.error('[SynapseTab Push Error]', err.message);
     await updateStatus({
@@ -96,13 +145,14 @@ async function pushSync(): Promise<void> {
 /**
  * Pulls remote state from backend and executes reconciliation.
  * @param isInitial Whether this is the bootstrap pull on extension/browser startup.
+ * @param preloadedRemoteState Optional pre-fetched remote snapshot.
  */
-async function pullSync(isInitial: boolean = false): Promise<void> {
+async function pullSync(isInitial: boolean = false, preloadedRemoteState?: SyncPayload): Promise<void> {
   if (isApplyingRemoteDiff) return;
 
   try {
     const settings = await loadSettings();
-    const remoteState = await SynapseApiClient.fetchRemoteState(settings);
+    const remoteState = preloadedRemoteState ?? (await SynapseApiClient.fetchRemoteState(settings));
 
     if (!remoteState) {
       // Nothing remote yet, push initial local snapshot
@@ -112,15 +162,10 @@ async function pullSync(isInitial: boolean = false): Promise<void> {
 
     const localState = await WorkspaceManager.captureLocalState(settings.clientId);
 
-    // If not initial startup, and remote state was emitted by this very client, we already have it
-    if (!isInitial && remoteState.client_id === settings.clientId) {
-      return;
-    }
-
     // Compute execution plan
     const plan = reconcile(localState, remoteState);
 
-    // If the plan has no changes, nothing to do
+    // If the plan has no changes, still record version and return
     const hasChanges =
       plan.tabsToCreate.length > 0 ||
       plan.tabsToClose.length > 0 ||
@@ -131,31 +176,33 @@ async function pullSync(isInitial: boolean = false): Promise<void> {
       plan.workspacesToRemove.length > 0 ||
       (plan.activeWorkspaceId && plan.activeWorkspaceId !== localState.active_workspace_id);
 
-    if (!hasChanges) {
-      await updateStatus({
-        state: 'synced',
-        lastSyncTime: Date.now(),
-        errorMessage: null,
-      });
-      return;
+    if (hasChanges) {
+      // Apply plan with lock to avoid listener loops
+      isApplyingRemoteDiff = true;
+      try {
+        await WorkspaceManager.applyExecutionPlan(plan);
+      } finally {
+        // Allow tab events and DOM to settle before releasing lock
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        isApplyingRemoteDiff = false;
+      }
     }
 
-    // Apply plan with lock to avoid listener loops
-    isApplyingRemoteDiff = true;
-    try {
-      await WorkspaceManager.applyExecutionPlan(plan);
-    } finally {
-      // Allow tab events and DOM to settle before releasing lock
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      isApplyingRemoteDiff = false;
-    }
+    // Update local version tracking to match pulled remote state
+    await setLocalVersionState({
+      version: remoteState.version ?? 1,
+      updatedAt: remoteState.updated_at,
+      hasLocalChanges: false,
+    });
 
     await updateStatus({
       state: 'synced',
       lastSyncTime: Date.now(),
       errorMessage: null,
     });
-    console.log('[SynapseTab] Remote reconciliation applied successfully.');
+    console.log(
+      `[SynapseTab] Remote reconciliation applied successfully (v${remoteState.version ?? remoteState.updated_at}).`
+    );
   } catch (err: any) {
     console.error('[SynapseTab Pull Error]', err.message);
     await updateStatus({
@@ -168,6 +215,7 @@ async function pullSync(isInitial: boolean = false): Promise<void> {
 
 /**
  * Register tab event listeners with 1000ms debounce.
+ * Only pushes changes when user interacts with tabs; never pulls automatically.
  */
 function setupTabListeners(): void {
   const onTabChange = () => {
@@ -206,16 +254,74 @@ function setupTabListeners(): void {
 }
 
 /**
- * Setup recurring alarms for background polling.
+ * Setup lifecycle listeners to push state when Firefox or windows close.
  */
-function setupAlarms(): void {
-  browser.alarms.create('synapse-pull-sync', { periodInMinutes: 0.25 }); // every 15s
-
-  browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === 'synapse-pull-sync') {
-      pullSync();
+function setupLifecycleListeners(): void {
+  // Flush pending changes when any window is closed
+  browser.windows.onRemoved.addListener(async () => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+      await pushSync();
+    } else {
+      const versionState = await getLocalVersionState();
+      if (versionState.hasLocalChanges) {
+        await pushSync();
+      }
     }
   });
+
+  // Flush pending changes on extension suspend / shutdown
+  if (typeof browser.runtime.onSuspend !== 'undefined' && browser.runtime.onSuspend.addListener) {
+    browser.runtime.onSuspend.addListener(() => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      pushSync().catch(() => {});
+    });
+  }
+}
+
+/**
+ * Handles the manual Synchronize button click:
+ * - If server contains a "newer version of the firefox instance", pull it.
+ * - If server has a lower or equal version of the current firefox instance, push it to the server.
+ */
+async function handleSynchronizeButton(): Promise<SyncStatus> {
+  try {
+    await updateStatus({ state: 'syncing', errorMessage: null });
+    const settings = await loadSettings();
+    const remoteState = await SynapseApiClient.fetchRemoteState(settings);
+
+    const versionState = await getLocalVersionState();
+    const action = determineSyncAction(remoteState, {
+      version: versionState.version,
+      updatedAt: versionState.updatedAt,
+      hasLocalChanges: versionState.hasLocalChanges || debounceTimer !== null,
+    });
+
+    if (action === 'pull' && remoteState) {
+      console.log(
+        `[SynapseTab] Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`
+      );
+      await pullSync(true, remoteState);
+    } else {
+      console.log(
+        `[SynapseTab] Server has lower or equal version (${remoteState?.version ?? remoteState?.updated_at ?? 0} <= ${versionState.version ?? versionState.updatedAt}). Pushing...`
+      );
+      await pushSync();
+    }
+
+    return currentStatus;
+  } catch (err: any) {
+    console.error('[SynapseTab Sync Error]', err.message);
+    await updateStatus({
+      state: 'error',
+      errorMessage: err.message || 'Synchronization failed',
+    });
+    return currentStatus;
+  }
 }
 
 /**
@@ -229,8 +335,7 @@ function setupMessageListener(): void {
           return currentStatus;
 
         case 'SYNC_NOW':
-          await pullSync(true);
-          return currentStatus;
+          return await handleSynchronizeButton();
 
       case 'SWITCH_WORKSPACE': {
         isApplyingRemoteDiff = true;
@@ -428,6 +533,10 @@ function setupMessageListener(): void {
         return await SynapseApiClient.updateBackupConfig(settings, message.config);
       }
 
+      case 'TEST_CONNECTION': {
+        return await SynapseApiClient.testConnection(message.url, message.secret);
+      }
+
       case 'EXPORT_STG': {
         const settings = await loadSettings();
         const localState = await WorkspaceManager.captureLocalState(settings.clientId);
@@ -493,10 +602,15 @@ async function init(): Promise<void> {
   // Initialize and assign UUIDs and workspaces for all existing tabs
   await WorkspaceManager.initializeExistingTabs();
 
-  setupAlarms();
+  // Clear any existing alarms so background polling never runs during usage
+  if (typeof browser.alarms !== 'undefined' && browser.alarms.clearAll) {
+    await browser.alarms.clearAll().catch(() => {});
+  }
+
+  setupLifecycleListeners();
   setupMessageListener();
 
-  // Initial pull sync - must reconcile against remote state even if client_id matches
+  // Initial pull sync - when Firefox is opened, pull changes from server
   try {
     await pullSync(true);
     hasCompletedInitialPull = true;

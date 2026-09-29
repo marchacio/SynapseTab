@@ -70,7 +70,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const data = response.json();
       expect(data.status).toBe('healthy');
       expect(data.redis).toBe('connected');
-      expect(data.version).toBe('1.0.2');
+      expect(data.version).toBe('1.1.0');
       expect(typeof data.uptime).toBe('number');
     });
   });
@@ -216,6 +216,40 @@ describe('SynapseTab Server Integration Tests', () => {
       expect(getRes.statusCode).toBe(200);
       const retrieved = getRes.json();
       expect(retrieved).toEqual(samplePayload);
+    });
+
+    it('successfully persists and returns version in workspace snapshot', async () => {
+      const payloadWithVersion: SyncPayload = {
+        ...samplePayload,
+        version: 42,
+      };
+
+      const postRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+        },
+        payload: payloadWithVersion,
+      });
+
+      expect(postRes.statusCode).toBe(200);
+      const postData = postRes.json();
+      expect(postData.status).toBe('ok');
+      expect(postData.version).toBe(42);
+
+      const getRes = await app.inject({
+        method: 'GET',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+        },
+      });
+
+      expect(getRes.statusCode).toBe(200);
+      const retrieved = getRes.json();
+      expect(retrieved.version).toBe(42);
+      expect(retrieved).toEqual(payloadWithVersion);
     });
 
     it('isolates state per user ID header', async () => {

@@ -10,6 +10,7 @@ import {
 } from '../types.js';
 import { importFromStgFormat, StgImportResult } from '../stg-adapter.js';
 import { getContrastingTextColor } from '../theme/tokens.js';
+import { SynapseApiClient, TestConnectionResult } from '../api.js';
 
 
 let currentWorkspaces: Workspace[] = [];
@@ -1176,8 +1177,22 @@ saveSettingsBtn.addEventListener('click', async () => {
   saveSettingsBtn.textContent = 'Saving...';
   settingsFeedbackMsg.className = 'import-feedback hidden';
 
+  let rawUrl = settingBackendUrl.value.trim() || 'http://localhost:8080';
+  const secret = settingSyncSecret.value.trim();
+
+  // Test connection and auto-heal URL
+  try {
+    const testRes = await SynapseApiClient.testConnection(rawUrl, secret);
+    if (testRes.ok && testRes.effectiveUrl) {
+      rawUrl = testRes.effectiveUrl;
+      settingBackendUrl.value = rawUrl;
+    }
+  } catch {
+    rawUrl = SynapseApiClient.normalizeUrl(rawUrl);
+  }
+
   const newSettings: SynapseSettings = {
-    backendUrl: settingBackendUrl.value.trim() || 'http://localhost:8080',
+    backendUrl: rawUrl,
     syncSecret: settingSyncSecret.value.trim() || 'synapse_dev_secret_123',
     userId: settingUserId.value.trim() || 'default',
     clientId: settingClientId.value.trim() || 'laptop-firefox-01',
@@ -1188,7 +1203,7 @@ saveSettingsBtn.addEventListener('click', async () => {
   currentSettings = newSettings;
 
   settingsFeedbackMsg.className = 'import-feedback success';
-  settingsFeedbackMsg.textContent = '✓ Configuration saved successfully!';
+  settingsFeedbackMsg.textContent = `✓ Configuration saved successfully! (${rawUrl})`;
   settingsFeedbackMsg.classList.remove('hidden');
   saveSettingsBtn.disabled = false;
   saveSettingsBtn.textContent = 'Save Configuration';
@@ -1203,24 +1218,25 @@ testConnectionBtn?.addEventListener('click', async () => {
   testConnectionBtn.textContent = 'Testing...';
   settingsFeedbackMsg.className = 'import-feedback hidden';
 
-  const url = settingBackendUrl.value.trim() || 'http://localhost:8080';
+  const rawUrl = settingBackendUrl.value.trim();
   const secret = settingSyncSecret.value.trim();
 
   try {
-    const startTime = performance.now();
-    const res = await fetch(`${url}/api/v1/health`, {
-      headers: secret ? { Authorization: `Bearer ${secret}` } : {},
-    });
-    const latency = Math.round(performance.now() - startTime);
+    const res = await SynapseApiClient.testConnection(rawUrl, secret);
 
     if (res.ok) {
-      const data = await res.json();
+      if (res.autoSwitchedProtocol || res.effectiveUrl !== rawUrl) {
+        settingBackendUrl.value = res.effectiveUrl;
+      }
       settingsFeedbackMsg.className = 'import-feedback success';
-      settingsFeedbackMsg.textContent = `✓ Server is reachable! (Status: ${data.status}, Redis: ${data.redis}, Latency: ${latency}ms)`;
+      const switchNotice = res.autoSwitchedProtocol
+        ? ` (Auto-detected ${res.effectiveUrl.startsWith('https') ? 'HTTPS' : 'HTTP'})`
+        : '';
+      settingsFeedbackMsg.textContent = `✓ Server is reachable!${switchNotice} (Status: ${res.status}, Redis: ${res.redis}, Latency: ${res.latencyMs}ms)`;
       settingsFeedbackMsg.classList.remove('hidden');
     } else {
       settingsFeedbackMsg.className = 'import-feedback error';
-      settingsFeedbackMsg.textContent = `Server responded with HTTP ${res.status}: ${res.statusText}`;
+      settingsFeedbackMsg.textContent = `Connection failed: ${res.error || 'Server unreachable'}`;
       settingsFeedbackMsg.classList.remove('hidden');
     }
   } catch (err: any) {

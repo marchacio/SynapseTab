@@ -59,7 +59,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       redis: isRedisConnected ? 'connected' : 'disconnected',
       uptime: Math.floor(process.uptime()),
       timestamp: Math.floor(Date.now() / 1000),
-      version: '1.0.2',
+      version: '1.1.0',
     };
 
     if (!isRedisConnected) {
@@ -87,6 +87,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       const response: SyncResponse = {
         status: 'ok',
         updated_at: payload.updated_at,
+        ...(payload.version !== undefined ? { version: payload.version } : {}),
       };
 
       return reply.status(200).send(response);

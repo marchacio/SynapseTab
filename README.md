@@ -30,40 +30,9 @@ SynapseTab is an Open-Source tab and workspace synchronization system engineered
 
 TODO add gif showing a cool demo of SynapseTab
 
-
-## 2. Core Architecture
-
-### 1. Workspaces
-Workspaces in SynapseTab **never** partition cookies, LocalStorage, or session tokens. All tabs live in the same window under a unified browsing context:
-- Inactive workspace tabs are tucked away using `browser.tabs.hide()`.
-- Active workspace tabs are made visible with `browser.tabs.show()`.
-- Transitions safely activate destination tabs before hiding origin tabs, adhering to Mozilla's tab-hiding rules.
-
-### 2. Stable Tab Identity
-Because Firefox internal `tabId`s are volatile across browser restarts, SynapseTab assigns an immutable UUIDv4 upon tab creation and persists it across sessions using `browser.sessions.setTabValue(tabId, "tab_uuid", uuid)`.
-
-### 3. Aggregation & Debounce
-Local tab operations (`tabs.onCreated`, `tabs.onUpdated`, `tabs.onRemoved`, `tabs.onMoved`, `tabs.onActivated`) are aggregated in memory. State sync payloads are dispatched to the backend only after a strict **1000ms debounce** window of user inactivity.
-
-### 4. Lazy Tab Materialization
-Incoming remote tabs are materialized in a suspended state using:
-```typescript
-browser.tabs.create({ url: remoteTab.url, discarded: true, active: false })
-```
-This guarantees **zero network requests** and **zero RAM consumption** until a tab is explicitly brought to focus by the user.
-
-### 5. Reconciliation algorithm
-State reconciliation is computed via a `diff` algorithm that produces a plan of actions to apply to the local state to match the remote state. See [docs/LOGIC.md](docs/LOGIC.md) for full architectural details on bootstrap precedence, echo suppression locks, and conflict resolution.
+## 2. Installation
 
 
-### 6. Durable Persistence Layer
-State is stored in Redis 7+ with Append-Only file (`appendonly yes`) logging enabled, keyed under `tabvortex:workspaces:<user_id>`.
-
-### 7. Automated Server Backups & Retention Policy
-Historical workspace snapshots are backed up directly on the server without client-side storage overhead:
-- **Periodic Snapshot Scheduler**: Automated background snapshots configurable to run `hourly`, `daily`, `weekly`, or `monthly`.
-- **Intelligent Retention Pruning**: Configurable retention limits (`maxCopies`, default 10) automatically prune older copies upon new snapshot creation.
-- **Visual Management UI**: Dedicated popup panel with direct controls to explore snapshot workspaces/tabs, restore past states with immediate client reconciliation, or delete backups.
 
 
 ## 3. Local development
@@ -71,43 +40,7 @@ Historical workspace snapshots are backed up directly on the server without clie
 See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for everything related to local development and testing.
 
 
-## 4. Production Deployment
-
-### Self-Hosting (Proxmox, Docker, Portainer)
-Deploy SynapseTab on a home server (e.g. Proxmox VE in an LXC or VM, Portainer, or bare Docker) behind a reverse proxy (Caddy, Nginx Proxy Manager, Traefik) or private VPN (Tailscale, WireGuard):
-
-```bash
-# 1. Clone repository to your server
-git clone https://github.com/marchacio/SynapseTab.git /opt/SynapseTab
-cd /opt/SynapseTab
-
-# 2. Configure production environment
-cp .env.example .env
-# Customize .env, in particular SYNC_SECRET
-
-# 3. Build and start the production stack (Redis + SynapseTab Server)
-docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d --build
-
-# 4. Verify deployment health
-curl http://localhost:8080/api/v1/health
-# Response: {"status":"ok","redis":"connected","timestamp":...}
-```
-
-
-### Backend Endpoints
-- `POST /api/v1/sync`: Persists workspace snapshot (Requires `Authorization: Bearer <SYNC_SECRET>`).
-- `GET /api/v1/sync`: Returns latest workspace snapshot (Requires `Authorization: Bearer <SYNC_SECRET>`).
-- `GET /api/v1/health`: Readiness probe returning 200 OK and Redis connection status.
-- `GET /api/v1/backups`: Lists stored backup metadata and active retention policy.
-- `POST /api/v1/backups`: Triggers an immediate manual snapshot backup.
-- `GET /api/v1/backups/:id`: Returns detailed snapshot contents for preview and exploration.
-- `POST /api/v1/backups/:id/restore`: Restores a snapshot into the active workspace state.
-- `DELETE /api/v1/backups/:id`: Deletes a specific backup snapshot.
-- `GET /api/v1/backups/config`: Fetches user backup schedule and retention policy.
-- `POST /api/v1/backups/config`: Updates backup schedule and retention policy.
-
-
-## 5. Automated testing suite
+## 4. Automated testing suite
 
 The codebase enforces strict test-driven development:
 
@@ -125,10 +58,10 @@ npm run test:server
 npm run lint:web-ext
 ```
 
-## 6. License
+## 5. License
 
 Released under the **MIT License**. 100% Free and Open-Source Software (FOSS).
 
-## 7. AI usage
+## 6. AI usage
 
 The entire project was developed using the Antigravity agent-based IDE (as you can see from the GEMINI.md file), in accordance with all best practices for software development and the use of AI.

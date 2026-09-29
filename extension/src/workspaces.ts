@@ -143,11 +143,18 @@ export class WorkspaceManager {
   /**
    * Captures the full local state across all workspaces and tabs in the current window.
    */
-  static async captureLocalState(clientId: string): Promise<SyncPayload> {
+  static async captureLocalState(
+    clientId: string,
+    version?: number,
+    updatedAt?: number
+  ): Promise<SyncPayload> {
     const storedWorkspaces = await this.getStoredWorkspaces();
     const activeWorkspaceId = await this.getActiveWorkspaceId();
 
-    const tabs = await browser.tabs.query({ currentWindow: true });
+    let tabs = await browser.tabs.query({ currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      tabs = await browser.tabs.query({});
+    }
 
     const workspaceTabsMap = new Map<string, TabItem[]>();
     for (const ws of storedWorkspaces) {
@@ -192,12 +199,16 @@ export class WorkspaceManager {
       });
     }
 
-    return {
+    const payload: SyncPayload = {
       client_id: clientId,
-      updated_at: Math.floor(Date.now() / 1000),
+      updated_at: updatedAt ?? Math.floor(Date.now() / 1000),
       active_workspace_id: activeWorkspaceId,
       workspaces,
     };
+    if (typeof version === 'number') {
+      payload.version = version;
+    }
+    return payload;
   }
 
   /**

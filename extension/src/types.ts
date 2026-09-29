@@ -29,6 +29,7 @@ export interface SyncPayload {
   updated_at: number;
   active_workspace_id: string;
   workspaces: Workspace[];
+  version?: number;
 }
 
 export interface ReconcilePlan {
