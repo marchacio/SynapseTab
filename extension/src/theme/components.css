@@ -1301,3 +1301,472 @@
 .hidden {
   display: none !important;
 }
+
+/* ==========================================================================
+   14. Debug & Diagnostics Console
+   ========================================================================== */
+
+.debug-actions-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.debug-metric-card {
+  background-color: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--md-sys-color-outline);
+}
+
+.debug-metric-value {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-metric-sub {
+  font-size: 10px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.debug-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.debug-filter-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.debug-filter-chip {
+  background-color: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--md-sys-shape-full);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.debug-filter-chip:hover {
+  background-color: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.debug-filter-chip.active {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-color: var(--md-sys-color-primary);
+  font-weight: 600;
+}
+
+.debug-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.styled-input-sm {
+  background-color: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--md-sys-shape-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  width: 130px;
+}
+
+.styled-input-sm:focus {
+  border-color: var(--md-sys-color-primary);
+  outline: none;
+}
+
+.debug-live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-console-wrapper {
+  background-color: #0b0f17;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.debug-console-header {
+  background-color: #131924;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.debug-console-stream {
+  height: 380px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.debug-log-line {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-log-line:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.debug-log-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-log-time {
+  color: #64748b;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.debug-log-badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.debug-badge-error {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.debug-badge-warn {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.debug-badge-sync {
+  background-color: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.debug-badge-info {
+  background-color: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.debug-log-cat {
+  color: #a5b4fc;
+  font-size: 10px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.debug-log-tabs-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-family: monospace;
+  color: #cbd5e1;
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.debug-log-tabs-chip.delta-inc {
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.3);
+  background-color: rgba(74, 222, 128, 0.1);
+}
+
+.debug-log-tabs-chip.delta-dec {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.3);
+  background-color: rgba(248, 113, 113, 0.1);
+}
+
+.debug-log-msg {
+  color: #f1f5f9;
+  word-break: break-word;
+  flex: 1;
+}
+
+.debug-log-details-toggle {
+  font-size: 10px;
+  color: #38bdf8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  text-decoration: underline;
+  outline: none;
+}
+
+.debug-log-details-pre {
+  background-color: #05080f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #a5b4fc;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.debug-copy-feedback {
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.debug-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   Restore Loading Screen Overlay (Foreground Lock & Progress)
+   ========================================================================== */
+
+.restore-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.restore-loading-overlay.hidden {
+  display: none !important;
+}
+
+.restore-loading-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 7, 15, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.restore-loading-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 32px;
+  background: linear-gradient(145deg, rgba(28, 24, 46, 0.96), rgba(15, 12, 28, 0.99));
+  border: 1px solid rgba(208, 188, 255, 0.22);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 32px rgba(124, 209, 255, 0.14);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: restoreCardPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes restoreCardPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.restore-icon-container {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.restore-spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(208, 188, 255, 0.15);
+  border-top-color: #d0bcff;
+  border-right-color: #7cd1ff;
+  animation: restoreSpin 1s linear infinite;
+}
+
+@keyframes restoreSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.restore-icon-center {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(208, 188, 255, 0.18), rgba(124, 209, 255, 0.18));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d0bcff;
+  transition: all 0.35s ease;
+}
+
+.restore-icon-center.success {
+  background: rgba(123, 216, 143, 0.22);
+  color: #7bd88f;
+  transform: scale(1.08);
+}
+
+.restore-loading-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.3px;
+}
+
+.restore-loading-status {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0 0 22px 0;
+  line-height: 1.4;
+}
+
+.restore-progress-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.restore-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease, background 0.35s ease;
+}
+
+.restore-progress-bar.indeterminate {
+  width: 50%;
+  background: linear-gradient(90deg, #d0bcff, #7cd1ff, #d0bcff);
+  background-size: 200% 100%;
+  animation: restoreIndeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes restoreIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.restore-progress-bar.success {
+  width: 100% !important;
+  background: #7bd88f !important;
+}
+
+.restore-loading-detail {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.45;
+  max-width: 360px;
+}
+
+.restore-completed-actions {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.restore-completed-actions.hidden {
+  display: none !important;
+}
+
+/* Startup loading screen mode */
+body.startup-loading-mode {
+  background: var(--md-sys-color-surface-container-lowest, #0e0e13) !important;
+  overflow: hidden !important;
+}
+
+body.startup-loading-mode .app-header,
+body.startup-loading-mode .layout-body {
+  display: none !important;
+}
+
+body.startup-loading-mode .restore-loading-overlay {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}

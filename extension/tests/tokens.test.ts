@@ -6,7 +6,7 @@ import {
   getContrastingTextColor,
   getPerceivedBrightness,
   hslToRgb,
-} from './tokens.js';
+} from '../src/theme/tokens.js';
 
 describe('Material 3 Design Tokens', () => {
   it('defines valid surface and tonal container colors', () => {

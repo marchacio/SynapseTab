@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { reconcile } from './diff.js';
-import { SyncPayload } from './types.js';
+import { reconcile } from '../src/diff.js';
+import { SyncPayload } from '../src/types.js';
 
 describe('SynapseTab Reconcile & Diff Engine (reconcile)', () => {
   const baseRemoteState: SyncPayload = {

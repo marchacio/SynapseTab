@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SynapseApiClient } from './api.js';
+import { SynapseApiClient } from '../src/api.js';
 
 describe('SynapseApiClient URL Normalization and Auto-Healing', () => {
   it('normalizes URLs without protocol to http://', () => {

@@ -6,19 +6,19 @@ This document explains how SynapseTab handles syncing between multiple Firefox i
 
 ## The Big Picture
 
-At its core, SynapseTab uses a simple rule: **when you start a browser, the server wins; once you are up and running, your latest changes win (Last-Write-Wins).**
-
-Here is what that looks like in practice:
-
-1. **When Firefox starts**, it always pulls from the server first. Local pushes are strictly locked until that initial sync finishes so you don't accidentally wipe out your remote tabs with an empty browser window.
-2. **When you do things locally** (open/close tabs, switch workspaces), the extension waits 1 second (1000ms debounce) for you to finish what you're doing, then pushes the whole workspace snapshot to Redis.
-3. **Other connected browsers** poll the server every 15 seconds. When they see a newer snapshot from another machine, they run a diff and update their open tabs to match.
+At its core, SynapseTab uses clear and deterministic rules:
+- **On browser startup**, the extension compares local version/timestamp against the server:
+  - If the server has a **newer version** (e.g. another Firefox instance was used and updated the server), it **pulls** the remote changes and reconciles tabs.
+  - If the local instance is **newer** (e.g. you worked outside/offline and couldn't push), it **pushes** the local changes to bring the server up to date.
+  - If the local instance is the **same** as the server, it **does nothing** (zero redundant reloading or tab churn).
+- **On fresh installation / initial configuration**, the extension detects it has not completed an initial sync yet. If a server snapshot exists, it **always pulls** first so an empty/fresh profile never overwrites your existing server state.
+- **While browsing**, the extension **only pushes** changes to the server (debounced by 2000ms). It does **not** poll or pull in the background during active usage.
 
 ---
 
-## What Happens When You Open Firefox (Time X vs Server X-1)
+## What Happens When You Open Firefox (Startup Evaluation)
 
-Imagine this common scenario: you worked on your desktop yesterday (Client A pushed state at `X-1`). Today, you boot up your laptop (Client B connects at `X`).
+Imagine this common scenario: you worked on your desktop yesterday (Client A pushed state at `v5`). Today, you boot up your laptop (Client B).
 
 Here is the exact step-by-step of what happens under the hood:
 
@@ -26,30 +26,33 @@ Here is the exact step-by-step of what happens under the hood:
 
 When Firefox launches, it often starts with an empty "New Tab" or slowly restores tabs in the background.
 
-If SynapseTab immediately pushed on startup, that single blank tab would overwrite and delete all 30 tabs you left on your desktop.
+If SynapseTab immediately pushed on startup, that single blank tab could overwrite and delete all 30 tabs you left on your desktop.
 
-To prevent this nightmare, there is a simple boolean guard in [`background.ts`](file:///home/marco/Condivisi/Progetti/SynapseTab/extension/src/background.ts):
+To prevent this, there is a boolean guard in [`background.ts`](file:///home/marco/Condivisi/Progetti/SynapseTab/extension/src/background.ts):
 ```typescript
 if (isApplyingRemoteDiff || !hasCompletedInitialPull) {
-  return; // Stop right here. No pushing allowed until we pulled from the server!
+  return; // Stop right here. No pushing allowed until startup evaluation finishes!
 }
 ```
 
-Until Client B downloads the remote state and finishes matching it, pushing is strictly disabled.
+Until Client B completes its startup evaluation and any required reconciliation, automatic pushing is strictly disabled.
 
-### 2. Fetching Remote State (`GET /api/v1/sync`)
+### 2. Fetching Remote State & 3-Way Decision (`determineSyncAction`)
 
-Client B asks the server for the latest snapshot:
-- **First time ever?** (Server is empty): Client B pushes its current tabs as the new baseline.
-- **On startup (`isInitial = true`)**: Client B **always reconciles against the remote snapshot**, even if the snapshot has the same `client_id`. This is critical: if you restarted Firefox or opened a fresh window with only 1 blank tab, the diff engine immediately restores all your workspaces and tabs from the server instead of ignoring them.
-- **During periodic background polling (every 15s)**: If `remoteState.client_id === myClientId`, the client skips reconciling since it was the one that pushed that snapshot and is already in sync.
+Client B contacts the server (`GET /api/v1/sync`):
+- **Server is empty?** Client B pushes its initial state to establish the server baseline.
+- **Fresh extension install / newly configured?** (`initialSyncCompleted === false`): Client B **pulls** the remote snapshot from the server first, adopting your workspaces and tabs.
+- **Server is newer?** (`remoteVersion > localVersion`): Another computer updated the server. Client B **pulls** the changes and reconciles.
+- **Local instance is newer?** (`localVersion === remoteVersion && hasLocalChanges` or `localVersion > remoteVersion`): Client B accumulated unpushed changes (e.g. working offline outside). Client B **pushes** to update the server.
+- **Local instance is identical?** (`localVersion === remoteVersion && !hasLocalChanges`): Local and server are in sync. Client B **does nothing**.
+- **Offline on startup?** If the client previously completed an initial sync, it continues in offline mode and tracks subsequent local tab edits so they can be pushed when reconnected.
 
 ### 3. The Diff Engine (`diff.ts`)
 
 During a pull, **what's on the server is the single source of truth**. The engine compares local vs remote:
 
 - **Tabs on the server that you don't have locally:**  
-  They get opened in your browser. But here's the trick: they open with `discarded: true`. Firefox creates the tab visually in your tab bar, but **does not load the web page or consume RAM** until you actually click on it.
+  They get opened in your browser with `discarded: true`. Firefox creates the tab visually in your tab bar, but **does not load the web page or consume RAM** until you actually click on it.
 - **Tabs you had locally that don't exist on the server:**  
   They get closed.
 - **Tabs that exist in both places (matched by their unique tab UUID):**  
@@ -78,21 +81,20 @@ All event listeners ignore events while `isApplyingRemoteDiff` is true. Once the
 
 ## What Happens When You're Browsing (Steady State)
 
-Once the initial pull is done, Client B is ready for normal everyday use:
+Once startup evaluation is complete, the extension enters normal browsing mode:
 
-### 1. The 1-Second Debounce Window
-Every time you open, close, move a tab, or switch workspaces, SynapseTab starts a 1000ms timer. If you do something else within that second (like closing 5 tabs quickly), the timer resets. Once you stop for a full second, it captures the current state and pushes it.
+### 1. The Debounce Window
+Every time you open, close, move a tab, or switch workspaces, SynapseTab starts a DEBOUNCE_DELAY_MS timer. If you do something else within that second (like closing 5 tabs quickly), the timer resets. Once you stop for a full second, it captures the current state and pushes it.
 
-This avoids spamming the backend with 10 HTTP requests when you simply rearrange your tab bar.
+This avoids spamming the backend with HTTP requests when you simply rearrange your tab bar.
 
-### 2. Last-Write-Wins on the Server
+### 2. Push-Only Operation During Usage
+While Firefox is running and in use, the extension **only pushes** local changes to the server. It does **not** perform background pulling or polling, ensuring that your active browsing session is never unexpectedly interrupted or modified by remote machines.
+
+### 3. Last-Write-Wins on the Server
 The server receives the snapshot with `POST /api/v1/sync` and writes it to Redis under `tabvortex:workspaces:{userId}`.
 
-Whoever pushed last wins. If two machines push at almost the same second, the last request that hits Redis becomes the active state.
-
-### 3. How Other Devices Find Out
-- **Background polling:** every client has a timer that polls the server every **15 seconds** (`browser.alarms`).
-- **Manual sync:** clicking the **Sync Now** button in the popup triggers `pullSync()` immediately.
+Whoever pushed last wins. If two machines push, the last request that hits Redis becomes the active state.
 
 ---
 
@@ -100,7 +102,9 @@ Whoever pushed last wins. If two machines push at almost the same second, the la
 
 | Scenario | What Happens |
 | :--- | :--- |
-| **You open laptop (B) while desktop (A) has tabs open** | Laptop pulls desktop's tabs. Tabs open in suspended mode (`discarded: true`) so your laptop doesn't freeze or max out your RAM. |
-| **You close a tab on desktop (A), laptop (B) is idle** | Next 15s check on the laptop sees the tab is gone from the server and closes it locally. |
-| **You close tabs on A and open tabs on B at the same time** | Both wait 1s. Whichever machine sends its request a split-second later overwrites the server. The other machine will sync to that state on its next 15s poll. |
+| **Fresh install on a new PC** | Detects uninitialized local state and pulls existing tabs/workspaces from server first; prevents blank browser from overwriting server. |
+| **You open laptop (B) after desktop (A) pushed changes** | Startup check detects server is newer (`remoteVersion > localVersion`) and pulls. Tabs open suspended (`discarded: true`). |
+| **You open laptop (B) after working offline outside** | Startup check detects laptop has unpushed local changes (`hasLocalChanges: true`) and pushes to update the server. |
+| **You open laptop (B) and nothing changed anywhere** | Startup check detects versions are identical and does nothing. Zero tab churn or network diffing. |
+| **You are actively browsing** | All tab events debounce (DEBOUNCE_DELAY_MS) and push to the server. No background pulls happen while using Firefox. |
 | **Someone accidentally closed all tabs or lost state** | Use the **Backups** tab in the popup. The server automatically takes snapshots on a schedule, and you can restore any previous snapshot with one click. |

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { importFromStgFormat, exportToStgFormat } from './stg-adapter.js';
+import { importFromStgFormat, exportToStgFormat } from '../src/stg-adapter.js';
 
 describe('STG Adapter Unit Tests', () => {
   it('correctly imports manual STG backup file if present', () => {

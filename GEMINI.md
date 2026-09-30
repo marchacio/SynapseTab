@@ -7,7 +7,7 @@
 
 ## 2. Core Constraints & Performance Philosophy
 - **Performance First:** The browser extension must introduce zero perceived latency and minimal memory impact.
-  - Event listener aggregation via a strict **1000ms debounce**.
+  - Event listener aggregation via a strict **DEBOUNCE_DELAY_MS**.
   - Incoming remote tabs must be materialized in a suspended state (`discarded: true`) to prevent simultaneous network fetches and RAM exhaustion.
 - **Shared Session Context:** Workspaces must **never** partition cookies or web storage. Tabs reside within a unified browsing context using `browser.tabs.hide()` and `browser.tabs.show()`.
 - **Stateless/Idempotent Diff Engine:** The reconciliation algorithm must be a pure, deterministic function tested against complex edge cases (split, merge, move, remote delete).

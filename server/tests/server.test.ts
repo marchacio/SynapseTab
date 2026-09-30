@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
 import RedisMock from 'ioredis-mock';
-import { buildServer } from './index.js';
-import { SyncPayload } from './types.js';
-import { closeRedis, setBackupConfig, saveWorkspaceSnapshot } from './redis.js';
-import { BackupScheduler } from './backup-scheduler.js';
+import { buildServer } from '../src/index.js';
+import { SyncPayload } from '../src/types.js';
+import { closeRedis, setBackupConfig, saveWorkspaceSnapshot } from '../src/redis.js';
+import { BackupScheduler } from '../src/backup-scheduler.js';
 
 describe('SynapseTab Server Integration Tests', () => {
   let app: FastifyInstance;
@@ -70,7 +70,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const data = response.json();
       expect(data.status).toBe('healthy');
       expect(data.redis).toBe('connected');
-      expect(data.version).toBe('1.1.0');
+      expect(data.version).toBe('1.2.0');
       expect(typeof data.uptime).toBe('number');
     });
   });
