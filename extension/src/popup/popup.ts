@@ -31,6 +31,7 @@ let currentEditColor = '#d0bcff';
 // DOM Elements - Header & Global
 const statusBadge = document.getElementById('statusBadge') as HTMLElement;
 const statusLabel = document.getElementById('statusLabel') as HTMLElement;
+const pullNowBtn = document.getElementById('pullNowBtn') as HTMLButtonElement | null;
 const pushNowBtn = (document.getElementById('pushNowBtn') || document.getElementById('syncNowBtn')) as HTMLButtonElement;
 const syncNowBtn = pushNowBtn;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
@@ -42,14 +43,36 @@ const navWorkspaces = document.getElementById('navWorkspaces') as HTMLButtonElem
 const navBackups = document.getElementById('navBackups') as HTMLButtonElement;
 const navImportExport = document.getElementById('navImportExport') as HTMLButtonElement;
 const navSettings = document.getElementById('navSettings') as HTMLButtonElement;
+const navCustomization = document.getElementById('navCustomization') as HTMLButtonElement | null;
 const navDebug = document.getElementById('navDebug') as HTMLButtonElement | null;
+const navInformation = document.getElementById('navInformation') as HTMLButtonElement | null;
+const navDestroy = document.getElementById('navDestroy') as HTMLButtonElement | null;
 
 // Main Sections
 const workspacesSection = document.getElementById('workspacesSection') as HTMLElement;
 const backupsSection = document.getElementById('backupsSection') as HTMLElement;
 const importExportSection = document.getElementById('importExportSection') as HTMLElement;
 const settingsSection = document.getElementById('settingsSection') as HTMLElement;
+const customizationSection = document.getElementById('customizationSection') as HTMLElement | null;
 const debugSection = document.getElementById('debugSection') as HTMLElement;
+const informationSection = document.getElementById('informationSection') as HTMLElement | null;
+const destroySection = document.getElementById('destroySection') as HTMLElement | null;
+
+// Customization Section Elements
+const settingDebounceDelay = document.getElementById('settingDebounceDelay') as HTMLInputElement | null;
+const saveCustomizationBtn = document.getElementById('saveCustomizationBtn') as HTMLButtonElement | null;
+const resetCustomizationBtn = document.getElementById('resetCustomizationBtn') as HTMLButtonElement | null;
+const customizationFeedbackMsg = document.getElementById('customizationFeedbackMsg') as HTMLElement | null;
+
+// Information Section Elements
+const infoVersionBadge = document.getElementById('infoVersionBadge') as HTMLElement | null;
+const infoExtensionVersion = document.getElementById('infoExtensionVersion') as HTMLElement | null;
+const infoPlatformEngine = document.getElementById('infoPlatformEngine') as HTMLElement | null;
+
+// Destroy Section Elements
+const confirmDestroyCheckbox = document.getElementById('confirmDestroyCheckbox') as HTMLInputElement | null;
+const executeDestroyBtn = document.getElementById('executeDestroyBtn') as HTMLButtonElement | null;
+const destroyFeedbackMsg = document.getElementById('destroyFeedbackMsg') as HTMLElement | null;
 
 // Workspaces & Tabs containers
 const workspacesList = document.getElementById('workspacesList') as HTMLElement;
@@ -314,6 +337,9 @@ function renderSyncStatus(status: SyncStatus): void {
     case 'synced':
       statusLabel.textContent = 'Synced';
       break;
+    case 'pending':
+      statusLabel.textContent = 'Pending';
+      break;
     case 'syncing':
       statusLabel.textContent = 'Syncing...';
       break;
@@ -340,21 +366,37 @@ function renderSyncStatus(status: SyncStatus): void {
   }
 }
 
+export type NavSection =
+  | 'workspaces'
+  | 'backups'
+  | 'importExport'
+  | 'settings'
+  | 'customization'
+  | 'information'
+  | 'destroy'
+  | 'debug';
+
 /**
  * Switches the active section in full-page mode.
  */
-async function switchSection(section: 'workspaces' | 'backups' | 'importExport' | 'settings' | 'debug'): Promise<void> {
+async function switchSection(section: NavSection): Promise<void> {
   workspacesSection.classList.add('hidden');
   backupsSection.classList.add('hidden');
   importExportSection.classList.add('hidden');
   settingsSection.classList.add('hidden');
+  customizationSection?.classList.add('hidden');
   debugSection.classList.add('hidden');
+  informationSection?.classList.add('hidden');
+  destroySection?.classList.add('hidden');
 
   navWorkspaces?.classList.remove('active');
   navBackups?.classList.remove('active');
   navImportExport?.classList.remove('active');
   navSettings?.classList.remove('active');
+  navCustomization?.classList.remove('active');
   navDebug?.classList.remove('active');
+  navInformation?.classList.remove('active');
+  navDestroy?.classList.remove('active');
 
   if (section !== 'debug' && debugLiveTimer) {
     clearInterval(debugLiveTimer);
@@ -381,11 +423,27 @@ async function switchSection(section: 'workspaces' | 'backups' | 'importExport' 
       navSettings?.classList.add('active');
       await loadAndDisplaySettings();
       break;
+    case 'customization':
+      customizationSection?.classList.remove('hidden');
+      navCustomization?.classList.add('active');
+      await loadAndDisplayCustomization();
+      break;
     case 'debug':
       debugSection.classList.remove('hidden');
       navDebug?.classList.add('active');
       await loadAndRenderDebugData();
       startDebugLiveTimer();
+      break;
+    case 'information':
+      informationSection?.classList.remove('hidden');
+      navInformation?.classList.add('active');
+      await loadAndDisplayInformation();
+      break;
+    case 'destroy':
+      destroySection?.classList.remove('hidden');
+      navDestroy?.classList.add('active');
+      initDestroySection();
+      break;
       break;
   }
 }
@@ -401,12 +459,77 @@ async function loadAndDisplaySettings(): Promise<void> {
     userId: 'default',
     clientId: 'laptop-firefox-01',
     pollIntervalSeconds: 15,
+    debounceDelayMs: 3000,
   };
 
   settingBackendUrl.value = currentSettings.backendUrl;
   settingSyncSecret.value = currentSettings.syncSecret;
   settingUserId.value = currentSettings.userId || 'default';
   settingClientId.value = currentSettings.clientId;
+}
+
+/**
+ * Loads customization settings from storage and populates inputs.
+ */
+async function loadAndDisplayCustomization(): Promise<void> {
+  const data = await browser.storage.local.get('settings');
+  const delay = typeof data?.settings?.debounceDelayMs === 'number'
+    ? data.settings.debounceDelayMs
+    : 3000;
+
+  if (settingDebounceDelay) {
+    settingDebounceDelay.value = String(delay);
+  }
+  updatePresetChipsState(delay);
+  if (customizationFeedbackMsg) {
+    customizationFeedbackMsg.className = 'import-feedback hidden';
+  }
+}
+
+function updatePresetChipsState(currentDelay: number): void {
+  const chips = document.querySelectorAll<HTMLButtonElement>('#customizationSection .preset-chip');
+  chips.forEach((chip) => {
+    const val = parseInt(chip.getAttribute('data-delay') || '0', 10);
+    if (val === currentDelay) {
+      chip.classList.add('active');
+    } else {
+      chip.classList.remove('active');
+    }
+  });
+}
+
+/**
+ * Loads information about the extension runtime and manifest.
+ */
+async function loadAndDisplayInformation(): Promise<void> {
+  try {
+    const manifest = browser.runtime.getManifest();
+    const version = manifest.version || '1.3.0';
+    if (infoVersionBadge) infoVersionBadge.textContent = `v${version}`;
+    if (infoExtensionVersion) infoExtensionVersion.textContent = version;
+    if (infoPlatformEngine) {
+      infoPlatformEngine.textContent = navigator.userAgent.includes('Firefox')
+        ? 'Mozilla Firefox'
+        : 'Gecko / WebExtension';
+    }
+  } catch {
+    // Keep defaults
+  }
+}
+
+/**
+ * Resets the destroy confirmation section state.
+ */
+function initDestroySection(): void {
+  if (confirmDestroyCheckbox) {
+    confirmDestroyCheckbox.checked = false;
+  }
+  if (executeDestroyBtn) {
+    executeDestroyBtn.disabled = true;
+  }
+  if (destroyFeedbackMsg) {
+    destroyFeedbackMsg.className = 'import-feedback hidden';
+  }
 }
 
 /**
@@ -1127,6 +1250,27 @@ async function handleFileSelected(file: File): Promise<void> {
 }
 
 // Header & Global Actions
+pullNowBtn?.addEventListener('click', async () => {
+  pullNowBtn.classList.add('spinning');
+  try {
+    const res = await browser.runtime.sendMessage({ type: 'PULL_NOW' });
+    if (res && res.pulled) {
+      renderSyncStatus({
+        state: 'synced',
+        lastSyncTime: Date.now(),
+        errorMessage: null,
+      });
+    }
+  } catch (err: any) {
+    console.error('[SynapseTab Pull Error]', err);
+  } finally {
+    setTimeout(() => {
+      pullNowBtn.classList.remove('spinning');
+    }, 600);
+    await refreshState();
+  }
+});
+
 pushNowBtn.addEventListener('click', async () => {
   pushNowBtn.classList.add('spinning');
   renderSyncStatus({ state: 'syncing', lastSyncTime: null, errorMessage: null });
@@ -1164,7 +1308,10 @@ navWorkspaces?.addEventListener('click', () => switchSection('workspaces'));
 navBackups?.addEventListener('click', () => switchSection('backups'));
 navImportExport?.addEventListener('click', () => switchSection('importExport'));
 navSettings?.addEventListener('click', () => switchSection('settings'));
+navCustomization?.addEventListener('click', () => switchSection('customization'));
 navDebug?.addEventListener('click', () => switchSection('debug'));
+navInformation?.addEventListener('click', () => switchSection('information'));
+navDestroy?.addEventListener('click', () => switchSection('destroy'));
 openDebugFromSettingsBtn?.addEventListener('click', () => switchSection('debug'));
 
 // Explorer Close
@@ -1586,6 +1733,7 @@ saveSettingsBtn.addEventListener('click', async () => {
     userId: settingUserId.value.trim() || 'default',
     clientId: settingClientId.value.trim() || 'laptop-firefox-01',
     pollIntervalSeconds: 15,
+    debounceDelayMs: typeof currentSettings?.debounceDelayMs === 'number' ? currentSettings.debounceDelayMs : 3000,
   };
 
   await browser.storage.local.set({ settings: newSettings });
@@ -1635,6 +1783,117 @@ testConnectionBtn?.addEventListener('click', async () => {
   } finally {
     testConnectionBtn.disabled = false;
     testConnectionBtn.textContent = 'Test Connection';
+  }
+});
+
+// Customization Section Actions
+document.querySelectorAll<HTMLButtonElement>('#customizationSection .preset-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const delay = parseInt(chip.getAttribute('data-delay') || '3000', 10);
+    if (settingDebounceDelay) {
+      settingDebounceDelay.value = String(delay);
+    }
+    updatePresetChipsState(delay);
+  });
+});
+
+settingDebounceDelay?.addEventListener('input', () => {
+  if (settingDebounceDelay) {
+    const delay = parseInt(settingDebounceDelay.value, 10);
+    updatePresetChipsState(delay);
+  }
+});
+
+saveCustomizationBtn?.addEventListener('click', async () => {
+  if (!settingDebounceDelay || !customizationFeedbackMsg) return;
+  saveCustomizationBtn.disabled = true;
+  saveCustomizationBtn.textContent = 'Saving...';
+  customizationFeedbackMsg.className = 'import-feedback hidden';
+
+  try {
+    const parsed = parseInt(settingDebounceDelay.value, 10);
+    const delay = isNaN(parsed) || parsed < 200 ? 3000 : parsed;
+    settingDebounceDelay.value = String(delay);
+    updatePresetChipsState(delay);
+
+    const data = await browser.storage.local.get('settings');
+    const updated: SynapseSettings = {
+      ...(data.settings || currentSettings),
+      debounceDelayMs: delay,
+    };
+
+    await browser.storage.local.set({ settings: updated });
+    currentSettings = updated;
+
+    customizationFeedbackMsg.className = 'import-feedback success';
+    customizationFeedbackMsg.textContent = `✓ Customization saved! Debounce delay set to ${delay}ms.`;
+    customizationFeedbackMsg.classList.remove('hidden');
+  } catch (err: any) {
+    customizationFeedbackMsg.className = 'import-feedback error';
+    customizationFeedbackMsg.textContent = `Failed to save customization: ${err.message}`;
+    customizationFeedbackMsg.classList.remove('hidden');
+  } finally {
+    saveCustomizationBtn.disabled = false;
+    saveCustomizationBtn.textContent = 'Save Customization';
+  }
+});
+
+resetCustomizationBtn?.addEventListener('click', () => {
+  if (settingDebounceDelay) {
+    settingDebounceDelay.value = '3000';
+    updatePresetChipsState(3000);
+  }
+});
+
+// Destroy Section Actions
+confirmDestroyCheckbox?.addEventListener('change', () => {
+  if (executeDestroyBtn && confirmDestroyCheckbox) {
+    executeDestroyBtn.disabled = !confirmDestroyCheckbox.checked;
+  }
+});
+
+executeDestroyBtn?.addEventListener('click', async () => {
+  if (!confirmDestroyCheckbox || !confirmDestroyCheckbox.checked || !executeDestroyBtn || !destroyFeedbackMsg) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Are you ABSOLUTELY sure you want to permanently delete all saved workspaces locally and on the remote server?\n\nThis will reset your local tabs and erase the remote state snapshot.'
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  executeDestroyBtn.disabled = true;
+  executeDestroyBtn.innerHTML = `<span>Destroying all workspaces...</span>`;
+  destroyFeedbackMsg.className = 'import-feedback hidden';
+
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'DESTROY_ALL_WORKSPACES' });
+    if (response && response.success) {
+      destroyFeedbackMsg.className = 'import-feedback success';
+      destroyFeedbackMsg.textContent = `✓ ${response.message || 'All workspaces deleted locally and on remote server.'}`;
+      destroyFeedbackMsg.classList.remove('hidden');
+      confirmDestroyCheckbox.checked = false;
+      await refreshState();
+    } else {
+      destroyFeedbackMsg.className = 'import-feedback error';
+      destroyFeedbackMsg.textContent = response?.message || 'Error occurred while destroying workspaces.';
+      destroyFeedbackMsg.classList.remove('hidden');
+    }
+  } catch (err: any) {
+    destroyFeedbackMsg.className = 'import-feedback error';
+    destroyFeedbackMsg.textContent = `Failed to destroy workspaces: ${err.message}`;
+    destroyFeedbackMsg.classList.remove('hidden');
+  } finally {
+    executeDestroyBtn.disabled = false;
+    executeDestroyBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+      </svg>
+      <span>Destroy All Workspaces (Local & Remote)</span>
+    `;
   }
 });
 
@@ -1862,7 +2121,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const requestedSection = urlParams.get('section') as any;
-  if (isTab && requestedSection && ['workspaces', 'backups', 'importExport', 'settings', 'debug'].includes(requestedSection)) {
+  if (
+    isTab &&
+    requestedSection &&
+    [
+      'workspaces',
+      'backups',
+      'importExport',
+      'settings',
+      'customization',
+      'information',
+      'destroy',
+      'debug',
+    ].includes(requestedSection)
+  ) {
     await switchSection(requestedSection);
   } else {
     await switchSection('workspaces');
@@ -1870,6 +2142,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadAndDisplaySettings();
   await refreshState();
+
+  // Footer version tag opens Information section
+  document.querySelectorAll('.version-tag').forEach((el) => {
+    el.addEventListener('click', async () => {
+      if (document.body.classList.contains('tab-mode')) {
+        await switchSection('information');
+      } else {
+        await browser.tabs.create({
+          url: browser.runtime.getURL('popup/index.html?mode=tab&section=information'),
+        });
+        window.close();
+      }
+    });
+  });
 
   // If opened with restoreBackupId, trigger restore in foreground with loading screen
   const restoreBackupId = urlParams.get('restoreBackupId');

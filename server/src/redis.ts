@@ -85,6 +85,15 @@ export async function getWorkspaceSnapshot(
   return JSON.parse(data) as SyncPayload;
 }
 
+export async function deleteWorkspaceSnapshot(
+  userId: string
+): Promise<boolean> {
+  const redis = getRedisClient();
+  const key = getWorkspaceRedisKey(userId);
+  const deleted = await redis.del(key);
+  return deleted > 0;
+}
+
 export async function saveBackup(
   userId: string,
   record: BackupRecord,

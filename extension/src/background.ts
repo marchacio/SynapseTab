@@ -7,13 +7,14 @@ import { updateActionIcon } from './action-icon.js';
 import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace, DebugLogLevel, DebugLogEntry, DebugDiagnostics } from './types.js';
 
-const DEBOUNCE_DELAY_MS = 5000;
+export const DEFAULT_DEBOUNCE_DELAY_MS = 3000;
 const DEFAULT_SETTINGS: SynapseSettings = {
   backendUrl: 'http://localhost:8080',
   syncSecret: 'synapse_dev_secret_123',
   userId: 'default',
   clientId: `firefox-${crypto.randomUUID().slice(0, 8)}`,
   pollIntervalSeconds: 15,
+  debounceDelayMs: DEFAULT_DEBOUNCE_DELAY_MS,
 };
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -168,6 +169,9 @@ async function loadSettings(): Promise<SynapseSettings> {
       ...DEFAULT_SETTINGS,
       ...data.settings,
       userId: data.settings.userId || 'default',
+      debounceDelayMs: typeof data.settings.debounceDelayMs === 'number' && data.settings.debounceDelayMs >= 100
+        ? data.settings.debounceDelayMs
+        : DEFAULT_DEBOUNCE_DELAY_MS,
     };
   }
   await browser.storage.local.set({ settings: DEFAULT_SETTINGS });
@@ -183,7 +187,8 @@ async function updateStatus(statusUpdate: Partial<SyncStatus>): Promise<void> {
 }
 
 /**
- * Emits local state to the backend after DEBOUNCE_DELAY_MS debounce.
+ * Emits local state to the backend after the configured debounce delay.
+ * Sets status to 'pending' while waiting for debounce.
  */
 async function triggerPushSync(): Promise<void> {
   if (isApplyingRemoteDiff || !hasCompletedInitialPull) {
@@ -191,15 +196,21 @@ async function triggerPushSync(): Promise<void> {
   }
 
   await setLocalVersionState({ hasLocalChanges: true });
+  await updateStatus({ state: 'pending', errorMessage: null });
 
   if (debounceTimer) {
     clearTimeout(debounceTimer);
   }
 
+  const settings = await loadSettings();
+  const delay = typeof settings.debounceDelayMs === 'number' && settings.debounceDelayMs >= 100
+    ? settings.debounceDelayMs
+    : DEFAULT_DEBOUNCE_DELAY_MS;
+
   debounceTimer = setTimeout(async () => {
     debounceTimer = null;
     await pushSync();
-  }, DEBOUNCE_DELAY_MS);
+  }, delay);
 }
 
 /**
@@ -564,6 +575,87 @@ async function handlePushNowButton(): Promise<SyncStatus> {
 }
 
 /**
+ * Handles the manual "Pull remote changes" button click:
+ * Looks for the version on the server:
+ * - If server has a newer version, downloads and applies it.
+ * - If server version is minor or equal, does nothing.
+ */
+async function handlePullNowButton(): Promise<{
+  pulled: boolean;
+  remoteVersion?: number;
+  localVersion?: number;
+  message: string;
+}> {
+  try {
+    const settings = await loadSettings();
+    const remoteState = await SynapseApiClient.fetchRemoteState(settings);
+
+    if (!remoteState) {
+      addDebugLog('sync', 'pull', 'Manual pull check: no remote snapshot found on server.');
+      return {
+        pulled: false,
+        message: 'No workspace snapshot found on remote server.',
+      };
+    }
+
+    const localState = await getLocalVersionState();
+    const remoteVersion = remoteState.version ?? 0;
+    const localVersion = localState.version ?? 0;
+
+    let isNewer = false;
+    if (remoteVersion > 0 && localVersion > 0) {
+      isNewer = remoteVersion > localVersion;
+    } else {
+      isNewer = (remoteState.updated_at || 0) > (localState.updatedAt || 0);
+    }
+
+    if (isNewer) {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      addDebugLog(
+        'sync',
+        'pull',
+        `Manual pull: server version (v${remoteVersion}) is newer than local (v${localVersion}). Applying update.`
+      );
+      await updateStatus({ state: 'syncing', errorMessage: null });
+      await pullSync(false, remoteState);
+      hasCompletedInitialPull = true;
+      return {
+        pulled: true,
+        remoteVersion,
+        localVersion,
+        message: `Updated to newer remote version (v${remoteVersion}).`,
+      };
+    } else {
+      addDebugLog(
+        'sync',
+        'pull',
+        `Manual pull check: server version (${remoteVersion}) is minor or equal to local (${localVersion}). Nothing to do.`
+      );
+      return {
+        pulled: false,
+        remoteVersion,
+        localVersion,
+        message: `Already up to date. Server version (${remoteVersion}) is not newer than local (${localVersion}).`,
+      };
+    }
+  } catch (err: any) {
+    console.error('[SynapseTab Pull Error]', err.message);
+    addDebugLog('error', 'pull', `Manual pull failed: ${err.message}`, err.stack || err);
+    await updateStatus({
+      state: 'error',
+      errorMessage: err.message || 'Pull failed',
+    });
+    return {
+      pulled: false,
+      message: `Pull failed: ${err.message}`,
+    };
+  }
+}
+
+/**
  * Message handler for popup UI requests.
  */
 function setupMessageListener(): void {
@@ -576,6 +668,9 @@ function setupMessageListener(): void {
         case 'PUSH_NOW':
         case 'SYNC_NOW':
           return await handlePushNowButton();
+
+        case 'PULL_NOW':
+          return await handlePullNowButton();
 
         case 'SWITCH_WORKSPACE': {
           isApplyingRemoteDiff = true;
@@ -689,6 +784,109 @@ function setupMessageListener(): void {
           await WorkspaceManager.saveStoredWorkspaces(filtered);
           await pushSync();
           return { success: true };
+        }
+
+        case 'DESTROY_ALL_WORKSPACES': {
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+          }
+          isApplyingRemoteDiff = true;
+
+          let remoteDeleteSuccess = false;
+          let remoteErrorMessage: string | null = null;
+
+          try {
+            const settings = await loadSettings();
+            try {
+              await SynapseApiClient.deleteRemoteWorkspaces(settings);
+              remoteDeleteSuccess = true;
+            } catch (apiErr: any) {
+              remoteErrorMessage = apiErr.message || String(apiErr);
+              console.warn('[SynapseTab] Failed to delete remote workspaces:', remoteErrorMessage);
+            }
+
+            // Create a clean new tab in each window to prevent window closure, associated with DEFAULT_WORKSPACE_ID
+            const allTabs = await browser.tabs.query({});
+            const keptTabIds = new Set<number>();
+            try {
+              const windows = await browser.windows.getAll();
+              for (const win of windows) {
+                if (win.id !== undefined) {
+                  const fallbackTab = await browser.tabs.create({
+                    windowId: win.id,
+                    active: true,
+                    url: 'about:blank',
+                  });
+                  if (fallbackTab.id !== undefined) {
+                    keptTabIds.add(fallbackTab.id);
+                    await WorkspaceManager.getOrAssignTabUuid(fallbackTab.id);
+                    await WorkspaceManager.setTabWorkspaceId(fallbackTab.id, DEFAULT_WORKSPACE_ID);
+                  }
+                }
+              }
+            } catch {
+              const fallbackTab = await browser.tabs.create({
+                active: true,
+                url: 'about:blank',
+              });
+              if (fallbackTab.id !== undefined) {
+                keptTabIds.add(fallbackTab.id);
+                await WorkspaceManager.getOrAssignTabUuid(fallbackTab.id);
+                await WorkspaceManager.setTabWorkspaceId(fallbackTab.id, DEFAULT_WORKSPACE_ID);
+              }
+            }
+
+            // Close all other tabs
+            for (const t of allTabs) {
+              if (t.id !== undefined && !keptTabIds.has(t.id)) {
+                try {
+                  await browser.tabs.remove(t.id);
+                } catch {
+                  // Tab may already have closed
+                }
+              }
+            }
+
+            // Reset stored workspaces to default only
+            await WorkspaceManager.saveStoredWorkspaces([
+              { id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME },
+            ]);
+            await WorkspaceManager.setActiveWorkspaceId(DEFAULT_WORKSPACE_ID);
+
+            // Reset local version state
+            await setLocalVersionState({
+              version: 0,
+              updatedAt: Math.floor(Date.now() / 1000),
+              hasLocalChanges: false,
+              initialSyncCompleted: true,
+            });
+
+            // Reset sync status
+            await updateStatus({
+              state: 'idle',
+              lastSyncTime: null,
+              errorMessage: null,
+            });
+
+            await updateActionIcon();
+
+            addDebugLog('warn', 'destroy', 'Destroyed all local workspaces and removed remote server state.', {
+              remoteDeleteSuccess,
+              remoteErrorMessage,
+            });
+
+            return {
+              success: true,
+              remoteDeleteSuccess,
+              remoteErrorMessage,
+              message: remoteDeleteSuccess
+                ? 'All workspaces deleted locally and on remote server.'
+                : `Workspaces deleted locally. Remote server error: ${remoteErrorMessage}`,
+            };
+          } finally {
+            isApplyingRemoteDiff = false;
+          }
         }
 
         case 'MOVE_TAB_WORKSPACE': {
@@ -904,7 +1102,7 @@ async function dismissStartupLoadingTab(
       type: 'STARTUP_SYNC_COMPLETED',
       success,
       errorMessage,
-    }).catch(() => {});
+    }).catch(() => { });
 
     if (success) {
       const activeWsId = await WorkspaceManager.getActiveWorkspaceId();
@@ -934,7 +1132,7 @@ async function dismissStartupLoadingTab(
         if (activeWsTabIds.length > 0) {
           try {
             await browser.tabs.show(activeWsTabIds);
-          } catch {}
+          } catch { }
           tabToActivate = activeWsTabIds[0];
         }
       }
@@ -952,7 +1150,7 @@ async function dismissStartupLoadingTab(
       if (tabToActivate) {
         try {
           await browser.tabs.update(tabToActivate, { active: true });
-        } catch {}
+        } catch { }
       }
 
       // Allow brief animation (400ms) for visual polish, then close loading tab
@@ -967,7 +1165,7 @@ async function dismissStartupLoadingTab(
     console.warn('[SynapseTab] Error dismissing startup loading tab:', err);
     try {
       await browser.tabs.remove(loadingTabId);
-    } catch {}
+    } catch { }
   }
 }
 

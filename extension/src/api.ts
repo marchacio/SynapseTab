@@ -370,4 +370,28 @@ export class SynapseApiClient {
 
     return (await response.json()) as { status: string; config: BackupConfig };
   }
+
+  /**
+   * Deletes the active workspace snapshot from the backend.
+   */
+  static async deleteRemoteWorkspaces(
+    settings: SynapseSettings
+  ): Promise<{ status: string; message: string; deleted?: boolean }> {
+    const userId = settings.userId || 'default';
+
+    const response = await this.fetchWithAutoHeal(settings, '/api/v1/sync', {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${settings.syncSecret}`,
+        'X-User-Id': userId,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to delete remote workspaces (${response.status}): ${errorText}`);
+    }
+
+    return (await response.json()) as { status: string; message: string; deleted?: boolean };
+  }
 }

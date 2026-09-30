@@ -54,7 +54,7 @@ Expected JSON response:
   "redis": "connected",
   "uptime": 2,
   "timestamp": 1773329000,
-  "version": "1.2.0"
+  "version": "1.3.0"
 }
 ```
 
@@ -109,73 +109,11 @@ npm run dev:client-b
 
 ---
 
-## 5. Verifying Automated Synchronization
+## 5. Running the Test Suites
 
-### Test Scenario 1: Tab Creation & Debounced Sync
-1. In **Client A**, open three tabs (e.g., `https://wikipedia.org`, `https://github.com`, `https://news.ycombinator.com`).
-2. Notice that the extension aggregates tab changes and waits for a **DEBOUNCE_DELAY_MS** window before transmitting to `POST /api/v1/sync`.
-3. In **Client B**, wait for the next polling cycle (or click **Sync Now** in the popup).
-4. Notice that **Client B** materializes all three tabs immediately.
-5. Inspect the newly created tabs in Client B: notice they are created with `{ discarded: true }` (suspended state), consuming **zero network requests and zero RAM** until you click on them.
-
-### Test Scenario 2: Tab Removal
-1. In **Client A**, close the `https://news.ycombinator.com` tab.
-2. After DEBOUNCE_DELAY_MS, the state is persisted to Redis.
-3. In **Client B**, the tab is automatically identified by the pure diff engine (`tabsToClose`) and closed without affecting other open tabs.
-
-### Test Scenario 3: Workspace Switching & Tab Hiding
-1. In **Client A**, click **+ New** in the popup and create a workspace named `Research`.
-2. Switch to `Research` and open two research tabs.
-3. Notice tabs from the `Main` workspace are hidden from the tab bar via `browser.tabs.hide()`.
-4. In **Client B**, the `Research` workspace appears with its corresponding tabs. Switching workspaces smoothly hides and reveals tabs in the unified session.
-
-### Test Scenario 4: Server Backups, Exploration, Restoration & Deletion
-1. In **Client A**, open the popup and click the **Server Backups** icon button (database icon next to settings).
-2. The UI smoothly transitions to the **Server Backups** panel.
-3. Click **+ Backup Now**. The server creates a timestamped snapshot of your current workspaces in Redis.
-4. Click **Explore** on the newly created backup to inspect all workspaces and tabs recorded within the snapshot.
-5. In **Client A**, delete or close several tabs or workspaces.
-6. Return to the **Server Backups** panel, click **Restore**, and confirm the dialog.
-7. Observe that the workspace state is immediately restored on the server and synchronized to both **Client A** and **Client B**.
-8. Test deleting past backups with confirmation and adjusting the **Auto-Backup Policy** (`Hourly`, `Daily`, `Weekly`, `Monthly`, `Disabled`) and **Max Copies** retention limit.
-
----
-
-## 6. Inspecting Logs & Debugging via `about:debugging`
-
-To inspect background console logs, network events, and stored session values:
-
-1. In either Firefox instance, navigate to `about:debugging`.
-2. Click **This Firefox** on the left navigation bar.
-3. Scroll down to **SynapseTab** under Temporary Extensions.
-4. Click **Inspect** to open the Web Developer Tools dedicated to the background module.
-5. In the Console tab, you will observe real-time log outputs:
-   - `[SynapseTab] Background service initialized.`
-   - `[SynapseTab] Local state pushed successfully.`
-   - `[SynapseTab] Remote reconciliation applied successfully.`
-6. You can evaluate the immutable session values on any tab in the console:
-   ```javascript
-   let [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-   console.log("Tab UUID:", await browser.sessions.getTabValue(tab.id, "tab_uuid"));
-   console.log("Workspace ID:", await browser.sessions.getTabValue(tab.id, "workspace_id"));
-   ```
-
----
-
-## 7. Running the Test Suites
-
-Execute all automated unit and integration tests across the monorepo:
+Execute all automated unit and integration tests across the repo:
 
 ```bash
 # Run all tests
 npm test
-
-# Run extension reconciliation tests only
-npm run test:extension
-
-# Run server integration tests only
-npm run test:server
-
-# Run web-ext lint compliance check
-npm run lint:web-ext
 ```

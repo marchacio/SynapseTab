@@ -70,10 +70,13 @@ export interface SynapseSettings {
   clientId: string;
   userId?: string;
   pollIntervalSeconds: number;
+  debounceDelayMs?: number;
 }
 
+export type SyncState = 'idle' | 'pending' | 'syncing' | 'synced' | 'error';
+
 export interface SyncStatus {
-  state: 'idle' | 'syncing' | 'synced' | 'error';
+  state: SyncState;
   lastSyncTime: number | null;
   errorMessage: string | null;
 }
