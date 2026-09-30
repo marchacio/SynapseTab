@@ -1753,3 +1753,20 @@
 .restore-completed-actions.hidden {
   display: none !important;
 }
+
+/* Startup loading screen mode */
+body.startup-loading-mode {
+  background: var(--md-sys-color-surface-container-lowest, #0e0e13) !important;
+  overflow: hidden !important;
+}
+
+body.startup-loading-mode .app-header,
+body.startup-loading-mode .layout-body {
+  display: none !important;
+}
+
+body.startup-loading-mode .restore-loading-overlay {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}

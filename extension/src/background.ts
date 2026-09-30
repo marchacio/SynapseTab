@@ -205,7 +205,7 @@ async function triggerPushSync(): Promise<void> {
 /**
  * Pushes local state to backend.
  */
-async function pushSync(): Promise<void> {
+async function pushSync(forceIncrement = false): Promise<void> {
   if (isApplyingRemoteDiff) return;
 
   try {
@@ -213,7 +213,7 @@ async function pushSync(): Promise<void> {
     const settings = await loadSettings();
     const versionState = await getLocalVersionState();
 
-    const versionToPush = versionState.hasLocalChanges
+    const versionToPush = (versionState.hasLocalChanges || forceIncrement)
       ? versionState.version + 1
       : Math.max(versionState.version, 1);
     const updatedAtToPush = Math.floor(Date.now() / 1000);
@@ -539,62 +539,25 @@ async function checkLocalSessionMissingTabs(remoteState: SyncPayload | null): Pr
 }
 
 /**
- * Handles the manual Synchronize button click:
- * - If server contains a newer version or local session is missing tabs, pull it.
- * - If local is newer (e.g. offline changes or higher version), push it to the server.
- * - If local is identical to server, do nothing.
+ * Handles the manual "Push changes now" button click:
+ * Forces an immediate push of the current local state to the server.
  */
-async function handleSynchronizeButton(): Promise<SyncStatus> {
+async function handlePushNowButton(): Promise<SyncStatus> {
   try {
-    await updateStatus({ state: 'syncing', errorMessage: null });
-    const settings = await loadSettings();
-    const remoteState = await SynapseApiClient.fetchRemoteState(settings);
-
-    const versionState = await getLocalVersionState();
-    const isMissingTabs = await checkLocalSessionMissingTabs(remoteState);
-    const action = determineSyncAction(remoteState, {
-      version: versionState.version,
-      updatedAt: versionState.updatedAt,
-      hasLocalChanges: versionState.hasLocalChanges || debounceTimer !== null,
-      initialSyncCompleted: versionState.initialSyncCompleted,
-      isLocalSessionMissingTabs: isMissingTabs,
-    });
-
-    if (action === 'pull' && remoteState) {
-      addDebugLog(
-        'sync',
-        'manual',
-        `Sync requested: pulling from server (v${remoteState.version ?? remoteState.updated_at}).`
-      );
-      await pullSync(true, remoteState);
-    } else if (action === 'push') {
-      addDebugLog(
-        'sync',
-        'manual',
-        `Sync requested: pushing local state to server.`
-      );
-      await pushSync();
-    } else {
-      addDebugLog(
-        'info',
-        'manual',
-        `Sync requested: local instance is identical to server (v${versionState.version}). No sync required.`
-      );
-      await updateStatus({
-        state: 'synced',
-        lastSyncTime: Date.now(),
-        errorMessage: null,
-      });
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
     }
-
+    addDebugLog('sync', 'manual', 'Manual push requested: pushing local state to server.');
+    await pushSync(true);
     hasCompletedInitialPull = true;
     return currentStatus;
   } catch (err: any) {
-    console.error('[SynapseTab Sync Error]', err.message);
-    addDebugLog('error', 'manual', `Synchronization failed: ${err.message}`, err.stack || err);
+    console.error('[SynapseTab Push Error]', err.message);
+    addDebugLog('error', 'manual', `Push failed: ${err.message}`, err.stack || err);
     await updateStatus({
       state: 'error',
-      errorMessage: err.message || 'Synchronization failed',
+      errorMessage: err.message || 'Push failed',
     });
     return currentStatus;
   }
@@ -610,8 +573,9 @@ function setupMessageListener(): void {
         case 'GET_STATUS':
           return currentStatus;
 
+        case 'PUSH_NOW':
         case 'SYNC_NOW':
-          return await handleSynchronizeButton();
+          return await handlePushNowButton();
 
         case 'SWITCH_WORKSPACE': {
           isApplyingRemoteDiff = true;
@@ -900,6 +864,114 @@ function setupMessageListener(): void {
 }
 
 /**
+ * Safely shows the startup workspace download loading tab.
+ */
+async function showStartupLoadingTab(): Promise<number | null> {
+  try {
+    const currentTabs = await browser.tabs.query({ currentWindow: true });
+    const activeTab = currentTabs.find((t) => t.active) || currentTabs[0];
+    const loadingUrl = browser.runtime.getURL('popup/index.html?mode=startup-loading');
+
+    const isBlankOrNew = (u?: string | null) =>
+      !u || u === 'about:blank' || u === 'about:newtab' || u === 'about:home';
+
+    if (activeTab && activeTab.id !== undefined && isBlankOrNew(activeTab.url)) {
+      await browser.tabs.update(activeTab.id, { url: loadingUrl, active: true });
+      return activeTab.id;
+    } else {
+      const newTab = await browser.tabs.create({ url: loadingUrl, active: true });
+      return newTab.id ?? null;
+    }
+  } catch (err) {
+    console.warn('[SynapseTab] Could not display startup loading tab:', err);
+    return null;
+  }
+}
+
+/**
+ * Safely removes the startup loading tab and activates a real workspace tab.
+ */
+async function dismissStartupLoadingTab(
+  loadingTabId: number | null,
+  success: boolean,
+  errorMessage?: string
+): Promise<void> {
+  if (!loadingTabId) return;
+
+  try {
+    // Broadcast completion to the loading tab UI
+    browser.runtime.sendMessage({
+      type: 'STARTUP_SYNC_COMPLETED',
+      success,
+      errorMessage,
+    }).catch(() => {});
+
+    if (success) {
+      const activeWsId = await WorkspaceManager.getActiveWorkspaceId();
+      const currentTabs = await browser.tabs.query({ currentWindow: true });
+
+      // Find tabs belonging to the active workspace that are not hidden
+      let tabToActivate: number | null = null;
+      for (const t of currentTabs) {
+        if (t.id === undefined || t.id === loadingTabId) continue;
+        const wsId = await WorkspaceManager.getTabWorkspaceId(t.id, activeWsId);
+        if (wsId === activeWsId && !t.hidden) {
+          tabToActivate = t.id;
+          break;
+        }
+      }
+
+      // If no visible tab found, show all active workspace tabs and pick the first
+      if (!tabToActivate) {
+        const activeWsTabIds: number[] = [];
+        for (const t of currentTabs) {
+          if (t.id === undefined || t.id === loadingTabId) continue;
+          const wsId = await WorkspaceManager.getTabWorkspaceId(t.id, activeWsId);
+          if (wsId === activeWsId) {
+            activeWsTabIds.push(t.id);
+          }
+        }
+        if (activeWsTabIds.length > 0) {
+          try {
+            await browser.tabs.show(activeWsTabIds);
+          } catch {}
+          tabToActivate = activeWsTabIds[0];
+        }
+      }
+
+      // Fallback: any other tab in the window
+      if (!tabToActivate) {
+        const otherTab = currentTabs.find(
+          (t) => t.id !== undefined && t.id !== loadingTabId && !t.hidden
+        );
+        if (otherTab && otherTab.id !== undefined) {
+          tabToActivate = otherTab.id;
+        }
+      }
+
+      if (tabToActivate) {
+        try {
+          await browser.tabs.update(tabToActivate, { active: true });
+        } catch {}
+      }
+
+      // Allow brief animation (400ms) for visual polish, then close loading tab
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await browser.tabs.remove(loadingTabId);
+    } else {
+      // In case of error, keep open for 1.8s so user sees the message, then close
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      await browser.tabs.remove(loadingTabId);
+    }
+  } catch (err) {
+    console.warn('[SynapseTab] Error dismissing startup loading tab:', err);
+    try {
+      await browser.tabs.remove(loadingTabId);
+    } catch {}
+  }
+}
+
+/**
  * Initialize extension background process.
  */
 async function init(): Promise<void> {
@@ -967,7 +1039,15 @@ async function init(): Promise<void> {
         ? `Local browser is missing remote workspaces/tabs (${remoteTotalTabs} remote tabs). Restoring session...`
         : `Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`;
       addDebugLog('sync', 'startup', reason);
-      await pullSync(true, remoteState);
+
+      const loadingTabId = await showStartupLoadingTab();
+      try {
+        await pullSync(true, remoteState);
+        await dismissStartupLoadingTab(loadingTabId, true);
+      } catch (pullErr: any) {
+        await dismissStartupLoadingTab(loadingTabId, false, pullErr.message);
+        throw pullErr;
+      }
     } else if (action === 'push') {
       addDebugLog(
         'sync',

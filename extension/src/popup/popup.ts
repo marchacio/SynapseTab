@@ -31,7 +31,8 @@ let currentEditColor = '#d0bcff';
 // DOM Elements - Header & Global
 const statusBadge = document.getElementById('statusBadge') as HTMLElement;
 const statusLabel = document.getElementById('statusLabel') as HTMLElement;
-const syncNowBtn = document.getElementById('syncNowBtn') as HTMLButtonElement;
+const pushNowBtn = (document.getElementById('pushNowBtn') || document.getElementById('syncNowBtn')) as HTMLButtonElement;
+const syncNowBtn = pushNowBtn;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const lastSyncedText = document.getElementById('lastSyncedText') as HTMLElement;
 
@@ -1126,12 +1127,12 @@ async function handleFileSelected(file: File): Promise<void> {
 }
 
 // Header & Global Actions
-syncNowBtn.addEventListener('click', async () => {
-  syncNowBtn.classList.add('spinning');
+pushNowBtn.addEventListener('click', async () => {
+  pushNowBtn.classList.add('spinning');
   renderSyncStatus({ state: 'syncing', lastSyncTime: null, errorMessage: null });
 
   try {
-    const updatedStatus = await browser.runtime.sendMessage({ type: 'SYNC_NOW' });
+    const updatedStatus = await browser.runtime.sendMessage({ type: 'PUSH_NOW' });
     if (updatedStatus) {
       renderSyncStatus(updatedStatus);
     }
@@ -1139,7 +1140,7 @@ syncNowBtn.addEventListener('click', async () => {
     renderSyncStatus({ state: 'error', lastSyncTime: null, errorMessage: err.message });
   } finally {
     setTimeout(() => {
-      syncNowBtn.classList.remove('spinning');
+      pushNowBtn.classList.remove('spinning');
     }, 600);
     await refreshState();
   }
@@ -1596,8 +1597,8 @@ saveSettingsBtn.addEventListener('click', async () => {
   saveSettingsBtn.disabled = false;
   saveSettingsBtn.textContent = 'Save Configuration';
 
-  // Trigger immediate sync
-  syncNowBtn.click();
+  // Trigger immediate push
+  pushNowBtn.click();
 });
 
 // Test Connection Action
@@ -1821,7 +1822,40 @@ confirmDeleteWsBtn?.addEventListener('click', async () => {
 // Initialization
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
-  const isTab = urlParams.get('mode') === 'tab' || !window.location.href.startsWith('moz-extension://') || window.innerWidth > 500;
+  const isStartupLoading = urlParams.get('mode') === 'startup-loading';
+  const isTab = urlParams.get('mode') === 'tab' || isStartupLoading || !window.location.href.startsWith('moz-extension://') || window.innerWidth > 500;
+
+  if (isStartupLoading) {
+    document.body.classList.add('tab-mode', 'startup-loading-mode');
+    restoreLoadingOverlay.classList.remove('hidden');
+    restoreLoadingTitle.textContent = 'Loading Workspaces & Tabs';
+    restoreLoadingStatus.textContent = 'Downloading your workspaces and tabs from the server...';
+    restoreLoadingDetail.textContent = 'Materializing tabs in suspended state to ensure instant launch and zero RAM impact. Please wait...';
+    restoreProgressBar.className = 'restore-progress-bar indeterminate';
+    restoreCompletedActions.classList.add('hidden');
+
+    browser.runtime.onMessage.addListener((message: any) => {
+      if (message.type === 'STARTUP_SYNC_COMPLETED') {
+        if (message.success) {
+          restoreLoadingTitle.textContent = 'Workspaces Ready';
+          restoreLoadingStatus.textContent = 'All workspaces and tabs are now synchronized.';
+          restoreProgressBar.className = 'restore-progress-bar success';
+          restoreIconCenter.classList.add('success');
+        } else {
+          restoreLoadingTitle.textContent = 'Sync Offline';
+          restoreLoadingStatus.textContent = message.errorMessage || 'Unable to reach sync server. Operating offline.';
+          restoreLoadingDetail.textContent = 'Continuing with local workspaces...';
+        }
+      }
+    });
+
+    // Fallback safety timeout (30s) in case background task fails to close tab
+    setTimeout(() => {
+      window.close();
+    }, 30000);
+
+    return;
+  }
 
   if (isTab) {
     document.body.classList.add('tab-mode');

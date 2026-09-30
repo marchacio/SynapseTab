@@ -168,6 +168,12 @@ export class WorkspaceManager {
     for (const tab of tabs) {
       if (tab.id === undefined) continue;
 
+      const tabRawUrl = tab.url || '';
+      // Skip extension internal pages (e.g. startup loading page, manager, etc.)
+      if (tabRawUrl.startsWith('moz-extension://') || (typeof browser !== 'undefined' && browser.runtime?.getURL && tabRawUrl.startsWith(browser.runtime.getURL('')))) {
+        continue;
+      }
+
       const uuid = await this.getOrAssignTabUuid(tab.id);
       const wsId = await this.getTabWorkspaceId(tab.id, activeWorkspaceId);
 
