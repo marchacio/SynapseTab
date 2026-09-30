@@ -70,7 +70,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const data = response.json();
       expect(data.status).toBe('healthy');
       expect(data.redis).toBe('connected');
-      expect(data.version).toBe('1.1.0');
+      expect(data.version).toBe('1.2.0');
       expect(typeof data.uptime).toBe('number');
     });
   });

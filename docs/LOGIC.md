@@ -12,7 +12,7 @@ At its core, SynapseTab uses clear and deterministic rules:
   - If the local instance is **newer** (e.g. you worked outside/offline and couldn't push), it **pushes** the local changes to bring the server up to date.
   - If the local instance is the **same** as the server, it **does nothing** (zero redundant reloading or tab churn).
 - **On fresh installation / initial configuration**, the extension detects it has not completed an initial sync yet. If a server snapshot exists, it **always pulls** first so an empty/fresh profile never overwrites your existing server state.
-- **While browsing**, the extension **only pushes** changes to the server (debounced by 1000ms). It does **not** poll or pull in the background during active usage.
+- **While browsing**, the extension **only pushes** changes to the server (debounced by 2000ms). It does **not** poll or pull in the background during active usage.
 
 ---
 
@@ -83,8 +83,8 @@ All event listeners ignore events while `isApplyingRemoteDiff` is true. Once the
 
 Once startup evaluation is complete, the extension enters normal browsing mode:
 
-### 1. The 1-Second Debounce Window
-Every time you open, close, move a tab, or switch workspaces, SynapseTab starts a 1000ms timer. If you do something else within that second (like closing 5 tabs quickly), the timer resets. Once you stop for a full second, it captures the current state and pushes it.
+### 1. The Debounce Window
+Every time you open, close, move a tab, or switch workspaces, SynapseTab starts a DEBOUNCE_DELAY_MS timer. If you do something else within that second (like closing 5 tabs quickly), the timer resets. Once you stop for a full second, it captures the current state and pushes it.
 
 This avoids spamming the backend with HTTP requests when you simply rearrange your tab bar.
 
@@ -106,5 +106,5 @@ Whoever pushed last wins. If two machines push, the last request that hits Redis
 | **You open laptop (B) after desktop (A) pushed changes** | Startup check detects server is newer (`remoteVersion > localVersion`) and pulls. Tabs open suspended (`discarded: true`). |
 | **You open laptop (B) after working offline outside** | Startup check detects laptop has unpushed local changes (`hasLocalChanges: true`) and pushes to update the server. |
 | **You open laptop (B) and nothing changed anywhere** | Startup check detects versions are identical and does nothing. Zero tab churn or network diffing. |
-| **You are actively browsing** | All tab events debounce (1000ms) and push to the server. No background pulls happen while using Firefox. |
+| **You are actively browsing** | All tab events debounce (DEBOUNCE_DELAY_MS) and push to the server. No background pulls happen while using Firefox. |
 | **Someone accidentally closed all tabs or lost state** | Use the **Backups** tab in the popup. The server automatically takes snapshots on a schedule, and you can restore any previous snapshot with one click. |

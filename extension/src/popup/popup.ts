@@ -7,6 +7,9 @@ import {
   BackupRecord,
   BackupConfig,
   BackupListResponse,
+  DebugLogEntry,
+  DebugDiagnostics,
+  DebugDataResponse,
 } from '../types.js';
 import { importFromStgFormat, StgImportResult } from '../stg-adapter.js';
 import { getContrastingTextColor } from '../theme/tokens.js';
@@ -38,12 +41,14 @@ const navWorkspaces = document.getElementById('navWorkspaces') as HTMLButtonElem
 const navBackups = document.getElementById('navBackups') as HTMLButtonElement;
 const navImportExport = document.getElementById('navImportExport') as HTMLButtonElement;
 const navSettings = document.getElementById('navSettings') as HTMLButtonElement;
+const navDebug = document.getElementById('navDebug') as HTMLButtonElement | null;
 
 // Main Sections
 const workspacesSection = document.getElementById('workspacesSection') as HTMLElement;
 const backupsSection = document.getElementById('backupsSection') as HTMLElement;
 const importExportSection = document.getElementById('importExportSection') as HTMLElement;
 const settingsSection = document.getElementById('settingsSection') as HTMLElement;
+const debugSection = document.getElementById('debugSection') as HTMLElement;
 
 // Workspaces & Tabs containers
 const workspacesList = document.getElementById('workspacesList') as HTMLElement;
@@ -114,9 +119,29 @@ const previewGroupsChips = document.getElementById('previewGroupsChips') as HTML
 const executeImportBtn = document.getElementById('executeImportBtn') as HTMLButtonElement;
 const importFeedbackMsg = document.getElementById('importFeedbackMsg') as HTMLElement;
 
-// Paste JSON elements
-const pasteJsonInput = document.getElementById('pasteJsonInput') as HTMLTextAreaElement;
-const parsePastedJsonBtn = document.getElementById('parsePastedJsonBtn') as HTMLButtonElement;
+// Debug Page Elements
+const openDebugFromSettingsBtn = document.getElementById('openDebugFromSettingsBtn') as HTMLButtonElement | null;
+const refreshDebugBtn = document.getElementById('refreshDebugBtn') as HTMLButtonElement;
+const copyDebugLogsBtn = document.getElementById('copyDebugLogsBtn') as HTMLButtonElement;
+const clearDebugLogsBtn = document.getElementById('clearDebugLogsBtn') as HTMLButtonElement;
+const debugSyncVersion = document.getElementById('debugSyncVersion') as HTMLElement;
+const debugSyncState = document.getElementById('debugSyncState') as HTMLElement;
+const debugLocalChanges = document.getElementById('debugLocalChanges') as HTMLElement;
+const debugInitialSync = document.getElementById('debugInitialSync') as HTMLElement;
+const debugServerStatus = document.getElementById('debugServerStatus') as HTMLElement;
+const debugServerUrl = document.getElementById('debugServerUrl') as HTMLElement;
+const debugTabsCount = document.getElementById('debugTabsCount') as HTMLElement;
+const debugUptime = document.getElementById('debugUptime') as HTMLElement;
+const countAllLogs = document.getElementById('countAllLogs') as HTMLElement;
+const countErrorLogs = document.getElementById('countErrorLogs') as HTMLElement;
+const countWarnLogs = document.getElementById('countWarnLogs') as HTMLElement;
+const countSyncLogs = document.getElementById('countSyncLogs') as HTMLElement;
+const countInfoLogs = document.getElementById('countInfoLogs') as HTMLElement;
+const debugSearchInput = document.getElementById('debugSearchInput') as HTMLInputElement;
+const debugLiveAutoRefresh = document.getElementById('debugLiveAutoRefresh') as HTMLInputElement;
+const debugShowingCount = document.getElementById('debugShowingCount') as HTMLElement;
+const debugCopyFeedback = document.getElementById('debugCopyFeedback') as HTMLElement;
+const debugLogsContainer = document.getElementById('debugLogsContainer') as HTMLElement;
 
 // Settings inputs
 const settingBackendUrl = document.getElementById('settingBackendUrl') as HTMLInputElement;
@@ -166,16 +191,23 @@ function renderSyncStatus(status: SyncStatus): void {
 /**
  * Switches the active section in full-page mode.
  */
-async function switchSection(section: 'workspaces' | 'backups' | 'importExport' | 'settings'): Promise<void> {
+async function switchSection(section: 'workspaces' | 'backups' | 'importExport' | 'settings' | 'debug'): Promise<void> {
   workspacesSection.classList.add('hidden');
   backupsSection.classList.add('hidden');
   importExportSection.classList.add('hidden');
   settingsSection.classList.add('hidden');
+  debugSection.classList.add('hidden');
 
   navWorkspaces?.classList.remove('active');
   navBackups?.classList.remove('active');
   navImportExport?.classList.remove('active');
   navSettings?.classList.remove('active');
+  navDebug?.classList.remove('active');
+
+  if (section !== 'debug' && debugLiveTimer) {
+    clearInterval(debugLiveTimer);
+    debugLiveTimer = null;
+  }
 
   switch (section) {
     case 'workspaces':
@@ -196,6 +228,12 @@ async function switchSection(section: 'workspaces' | 'backups' | 'importExport' 
       settingsSection.classList.remove('hidden');
       navSettings?.classList.add('active');
       await loadAndDisplaySettings();
+      break;
+    case 'debug':
+      debugSection.classList.remove('hidden');
+      navDebug?.classList.add('active');
+      await loadAndRenderDebugData();
+      startDebugLiveTimer();
       break;
   }
 }
@@ -978,6 +1016,8 @@ navWorkspaces?.addEventListener('click', () => switchSection('workspaces'));
 navBackups?.addEventListener('click', () => switchSection('backups'));
 navImportExport?.addEventListener('click', () => switchSection('importExport'));
 navSettings?.addEventListener('click', () => switchSection('settings'));
+navDebug?.addEventListener('click', () => switchSection('debug'));
+openDebugFromSettingsBtn?.addEventListener('click', () => switchSection('debug'));
 
 // Explorer Close
 closeExplorerBtn.addEventListener('click', () => {
@@ -1058,32 +1098,261 @@ stgDropZone.addEventListener('drop', (e) => {
   }
 });
 
-// Paste JSON Actions
-pasteJsonInput.addEventListener('input', () => {
-  const text = pasteJsonInput.value.trim();
-  if (text && (text.startsWith('{') || text.startsWith('['))) {
-    processJsonContent(text, 'pasted-content.json');
+// ==========================================================================
+// Debug & Diagnostics Subsystem
+// ==========================================================================
+let allDebugLogs: DebugLogEntry[] = [];
+let currentDebugFilter: 'all' | 'error' | 'warn' | 'sync' | 'info' = 'all';
+let debugLiveTimer: ReturnType<typeof setInterval> | null = null;
+
+function startDebugLiveTimer(): void {
+  if (debugLiveTimer) clearInterval(debugLiveTimer);
+  if (debugLiveAutoRefresh && debugLiveAutoRefresh.checked) {
+    debugLiveTimer = setInterval(async () => {
+      if (!debugSection.classList.contains('hidden')) {
+        await loadAndRenderDebugData(true);
+      }
+    }, 3000);
   }
-});
+}
 
-pasteJsonInput.addEventListener('paste', () => {
-  setTimeout(() => {
-    const text = pasteJsonInput.value.trim();
-    if (text && (text.startsWith('{') || text.startsWith('['))) {
-      processJsonContent(text, 'pasted-content.json');
+async function loadAndRenderDebugData(isLiveUpdate: boolean = false): Promise<void> {
+  try {
+    const res: DebugDataResponse = await browser.runtime.sendMessage({ type: 'GET_DEBUG_DATA' });
+    if (!res) return;
+
+    allDebugLogs = res.logs || [];
+    const diag = res.diagnostics;
+
+    if (diag) {
+      const ver = diag.localVersionState?.version ?? 0;
+      const state = diag.status?.state ?? 'idle';
+      debugSyncVersion.textContent = `v${ver} (${state.toUpperCase()})`;
+      debugSyncState.textContent = diag.status?.errorMessage
+        ? `Error: ${diag.status.errorMessage}`
+        : `State: ${state} • Last: ${diag.status?.lastSyncTime ? new Date(diag.status.lastSyncTime).toLocaleTimeString() : 'never'}`;
+
+      const hasChanges = diag.localVersionState?.hasLocalChanges;
+      debugLocalChanges.textContent = hasChanges ? '⚠️ Pending Changes' : 'Clean';
+      debugLocalChanges.style.color = hasChanges ? '#fbbf24' : '#4ade80';
+      debugInitialSync.textContent = `Initial sync: ${diag.localVersionState?.initialSyncCompleted ? 'completed' : 'pending'}`;
+
+      debugServerUrl.textContent = diag.settings?.backendUrl || 'None';
+      debugTabsCount.textContent = `${diag.workspacesCount} ws / ${diag.tabsCount} tabs`;
+      const hrs = Math.floor(diag.uptimeSeconds / 3600);
+      const mins = Math.floor((diag.uptimeSeconds % 3600) / 60);
+      const secs = diag.uptimeSeconds % 60;
+      debugUptime.textContent = `Uptime: ${hrs > 0 ? `${hrs}h ` : ''}${mins}m ${secs}s`;
+
+      if (!isLiveUpdate) {
+        debugServerStatus.textContent = 'Testing...';
+        SynapseApiClient.testConnection(diag.settings.backendUrl, diag.settings.syncSecret)
+          .then((testRes) => {
+            if (testRes.ok) {
+              debugServerStatus.textContent = `Connected (${testRes.latencyMs}ms)`;
+              debugServerStatus.style.color = '#4ade80';
+            } else {
+              debugServerStatus.textContent = 'Degraded / Error';
+              debugServerStatus.style.color = '#f87171';
+            }
+          })
+          .catch(() => {
+            debugServerStatus.textContent = 'Offline';
+            debugServerStatus.style.color = '#f87171';
+          });
+      }
     }
-  }, 50);
-});
 
-parsePastedJsonBtn.addEventListener('click', () => {
-  const text = pasteJsonInput.value.trim();
-  if (!text) {
-    importFeedbackMsg.className = 'import-feedback error';
-    importFeedbackMsg.textContent = 'Please paste valid JSON text into the box.';
-    importFeedbackMsg.classList.remove('hidden');
+    const errCount = allDebugLogs.filter((l) => l.level === 'error').length;
+    const warnCount = allDebugLogs.filter((l) => l.level === 'warn').length;
+    const syncCount = allDebugLogs.filter((l) => l.level === 'sync').length;
+    const infoCount = allDebugLogs.filter((l) => l.level === 'info').length;
+
+    countAllLogs.textContent = String(allDebugLogs.length);
+    countErrorLogs.textContent = String(errCount);
+    countWarnLogs.textContent = String(warnCount);
+    countSyncLogs.textContent = String(syncCount);
+    countInfoLogs.textContent = String(infoCount);
+
+    renderDebugLogs();
+  } catch (err: any) {
+    console.error('Failed to load debug data:', err);
+  }
+}
+
+function renderDebugLogs(): void {
+  const searchTerm = debugSearchInput.value.trim().toLowerCase();
+
+  const filtered = allDebugLogs.filter((entry) => {
+    if (currentDebugFilter !== 'all' && entry.level !== currentDebugFilter) {
+      return false;
+    }
+    if (searchTerm) {
+      const matchMsg = entry.message.toLowerCase().includes(searchTerm);
+      const matchCat = entry.category.toLowerCase().includes(searchTerm);
+      const matchDetails = entry.details ? entry.details.toLowerCase().includes(searchTerm) : false;
+      return matchMsg || matchCat || matchDetails;
+    }
+    return true;
+  });
+
+  debugShowingCount.textContent = String(filtered.length);
+  debugLogsContainer.innerHTML = '';
+
+  if (filtered.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'debug-empty-state';
+    empty.textContent = allDebugLogs.length === 0
+      ? 'No logs captured yet. Tab activity and sync events will appear here.'
+      : 'No logs match the current filter or search criteria.';
+    debugLogsContainer.appendChild(empty);
     return;
   }
-  processJsonContent(text, 'pasted-content.json');
+
+  const reversed = [...filtered].reverse();
+
+  for (const entry of reversed) {
+    const row = document.createElement('div');
+    row.className = 'debug-log-line';
+
+    const header = document.createElement('div');
+    header.className = 'debug-log-header';
+
+    const time = document.createElement('span');
+    time.className = 'debug-log-time';
+    const d = new Date(entry.timestamp);
+    const ms = String(d.getMilliseconds()).padStart(3, '0');
+    time.textContent = `${d.toTimeString().slice(0, 8)}.${ms}`;
+
+    const badge = document.createElement('span');
+    badge.className = `debug-log-badge debug-badge-${entry.level}`;
+    badge.textContent = entry.level;
+
+    const cat = document.createElement('span');
+    cat.className = 'debug-log-cat';
+    cat.textContent = `[${entry.category}]`;
+
+    // Extract tabCountChange if present in details
+    let tabCountChip: HTMLElement | null = null;
+    if (entry.details) {
+      try {
+        const parsed = JSON.parse(entry.details);
+        if (parsed && parsed.tabCountChange && typeof parsed.tabCountChange.current === 'number') {
+          const { current, delta } = parsed.tabCountChange;
+          tabCountChip = document.createElement('span');
+          tabCountChip.className = 'debug-log-tabs-chip';
+          const hasDelta = delta !== undefined && delta !== '0' && delta !== '+0';
+          if (typeof delta === 'string' && delta.startsWith('+') && delta !== '+0') {
+            tabCountChip.classList.add('delta-inc');
+          } else if (typeof delta === 'string' && delta.startsWith('-')) {
+            tabCountChip.classList.add('delta-dec');
+          }
+          tabCountChip.textContent = `tabs: ${current}${hasDelta ? ` (${delta})` : ''}`;
+        }
+      } catch { }
+    }
+
+    const msg = document.createElement('span');
+    msg.className = 'debug-log-msg';
+    msg.textContent = entry.message;
+
+    header.appendChild(time);
+    header.appendChild(badge);
+    header.appendChild(cat);
+    if (tabCountChip) {
+      header.appendChild(tabCountChip);
+    }
+    header.appendChild(msg);
+
+    if (entry.details) {
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'debug-log-details-toggle';
+      toggleBtn.textContent = 'details';
+
+      const pre = document.createElement('pre');
+      pre.className = 'debug-log-details-pre hidden';
+      pre.textContent = entry.details;
+
+      toggleBtn.addEventListener('click', () => {
+        const isHidden = pre.classList.toggle('hidden');
+        toggleBtn.textContent = isHidden ? 'details' : 'hide';
+      });
+
+      header.appendChild(toggleBtn);
+      row.appendChild(header);
+      row.appendChild(pre);
+    } else {
+      row.appendChild(header);
+    }
+
+    debugLogsContainer.appendChild(row);
+  }
+}
+
+// Debug Filter Chip Listeners
+document.querySelectorAll('.debug-filter-chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.debug-filter-chip').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDebugFilter = (btn.getAttribute('data-level') || 'all') as any;
+    renderDebugLogs();
+  });
+});
+
+debugSearchInput.addEventListener('input', () => {
+  renderDebugLogs();
+});
+
+debugLiveAutoRefresh.addEventListener('change', () => {
+  if (debugLiveAutoRefresh.checked) {
+    startDebugLiveTimer();
+  } else if (debugLiveTimer) {
+    clearInterval(debugLiveTimer);
+    debugLiveTimer = null;
+  }
+});
+
+refreshDebugBtn.addEventListener('click', async () => {
+  refreshDebugBtn.disabled = true;
+  await loadAndRenderDebugData();
+  refreshDebugBtn.disabled = false;
+});
+
+copyDebugLogsBtn.addEventListener('click', async () => {
+  const text = allDebugLogs
+    .map((l) => {
+      const date = new Date(l.timestamp).toISOString();
+      let tabPrefix = '';
+      if (l.details) {
+        try {
+          const parsed = JSON.parse(l.details);
+          if (parsed && parsed.tabCountChange && typeof parsed.tabCountChange.current === 'number') {
+            tabPrefix = ` [tabs: ${parsed.tabCountChange.current} (${parsed.tabCountChange.delta})]`;
+          }
+        } catch { }
+      }
+      const det = l.details ? `\nDetails: ${l.details}` : '';
+      return `[${date}] [${l.level.toUpperCase()}] [${l.category}]${tabPrefix} ${l.message}${det}`;
+    })
+    .join('\n');
+
+  try {
+    await navigator.clipboard.writeText(text);
+    debugCopyFeedback.classList.remove('hidden');
+    setTimeout(() => {
+      debugCopyFeedback.classList.add('hidden');
+    }, 2500);
+  } catch {
+    alert('Failed to copy logs to clipboard');
+  }
+});
+
+clearDebugLogsBtn.addEventListener('click', async () => {
+  if (confirm('Clear all debug logs?')) {
+    await browser.runtime.sendMessage({ type: 'CLEAR_DEBUG_LOGS' });
+    await loadAndRenderDebugData();
+  }
 });
 
 // Execute Import
@@ -1440,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const requestedSection = urlParams.get('section') as any;
-  if (isTab && requestedSection && ['workspaces', 'backups', 'importExport', 'settings'].includes(requestedSection)) {
+  if (isTab && requestedSection && ['workspaces', 'backups', 'importExport', 'settings', 'debug'].includes(requestedSection)) {
     await switchSection(requestedSection);
   } else {
     await switchSection('workspaces');

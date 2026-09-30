@@ -85,6 +85,14 @@
           </svg>
           <span>Sync Settings</span>
         </button>
+        <button id="navDebug" class="nav-item" data-section="debug">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          <span>Debug & Logs</span>
+        </button>
       </nav>
 
       <!-- Main Content Container -->
@@ -245,16 +253,6 @@
               <span class="drop-text" id="dropZoneText">Click to select or drop JSON file</span>
             </label>
 
-            <!-- Paste JSON Section -->
-            <div class="paste-json-section">
-              <div class="paste-section-header">
-                <label for="pasteJsonInput"><strong>📋 Or Paste JSON Text Directly:</strong></label>
-              </div>
-              <textarea id="pasteJsonInput" class="styled-textarea" rows="4"
-                placeholder="Paste entire STG JSON backup content here (e.g. Ctrl+V)..."></textarea>
-              <button id="parsePastedJsonBtn" class="btn btn-sm btn-secondary btn-block" type="button"
-                style="margin-top: 6px;">Parse Pasted JSON</button>
-            </div>
 
             <!-- Import Preview Box (shown after valid file parsed) -->
             <div id="importPreviewCard" class="import-preview-box hidden">
@@ -336,6 +334,91 @@
             </div>
 
             <div id="settingsFeedbackMsg" class="import-feedback hidden" style="margin-top: 8px;"></div>
+          </div>
+
+          <!-- Diagnostics & Troubleshooting Quick Link Card -->
+          <div class="feature-card" style="margin-top: 14px;">
+            <div class="card-header">
+              <div class="card-header-title">
+                <span class="card-icon">🛠️</span>
+                <span class="card-title">Diagnostics & System Logs</span>
+              </div>
+            </div>
+            <p class="card-desc">
+              Inspect real-time background service logs, sync decision history, error traces, and live connection diagnostics.
+            </p>
+            <button id="openDebugFromSettingsBtn" class="btn btn-secondary btn-block" type="button">
+              View Debug Console & Logs
+            </button>
+          </div>
+        </main>
+
+        <!-- 5. Debug & Diagnostics Section -->
+        <main id="debugSection" class="main-content hidden">
+          <div class="section-title">
+            <h2>Debug & System Logs</h2>
+            <div class="debug-actions-header">
+              <button id="refreshDebugBtn" class="btn btn-sm btn-secondary" title="Refresh Diagnostics & Logs">Refresh</button>
+              <button id="copyDebugLogsBtn" class="btn btn-sm btn-secondary" title="Copy raw logs to clipboard">Copy Logs</button>
+              <button id="clearDebugLogsBtn" class="btn btn-sm btn-danger" title="Clear all stored logs">Clear</button>
+            </div>
+          </div>
+
+          <!-- Diagnostic Metrics Cards -->
+          <div class="debug-metrics-grid">
+            <div class="debug-metric-card">
+              <span class="debug-metric-label">Sync Status / Version</span>
+              <div class="debug-metric-value" id="debugSyncVersion">v0 (Idle)</div>
+              <span class="debug-metric-sub" id="debugSyncState">State: idle</span>
+            </div>
+
+            <div class="debug-metric-card">
+              <span class="debug-metric-label">Local Changes</span>
+              <div class="debug-metric-value" id="debugLocalChanges">Clean</div>
+              <span class="debug-metric-sub" id="debugInitialSync">Initial sync: yes</span>
+            </div>
+
+            <div class="debug-metric-card">
+              <span class="debug-metric-label">Server Connection</span>
+              <div class="debug-metric-value" id="debugServerStatus">Checking...</div>
+              <span class="debug-metric-sub" id="debugServerUrl">http://...</span>
+            </div>
+
+            <div class="debug-metric-card">
+              <span class="debug-metric-label">Workspaces / Tabs</span>
+              <div class="debug-metric-value" id="debugTabsCount">0 ws / 0 tabs</div>
+              <span class="debug-metric-sub" id="debugUptime">Uptime: 0s</span>
+            </div>
+          </div>
+
+          <!-- Toolbar: Filters, Search, Live-Tail -->
+          <div class="debug-toolbar">
+            <div class="debug-filter-chips">
+              <button class="debug-filter-chip active" data-level="all">All (<span id="countAllLogs">0</span>)</button>
+              <button class="debug-filter-chip" data-level="error">Errors (<span id="countErrorLogs">0</span>)</button>
+              <button class="debug-filter-chip" data-level="warn">Warnings (<span id="countWarnLogs">0</span>)</button>
+              <button class="debug-filter-chip" data-level="sync">Sync (<span id="countSyncLogs">0</span>)</button>
+              <button class="debug-filter-chip" data-level="info">Info (<span id="countInfoLogs">0</span>)</button>
+            </div>
+
+            <div class="debug-controls-right">
+              <input type="text" id="debugSearchInput" class="styled-input-sm" placeholder="Filter logs...">
+              <label class="debug-live-toggle">
+                <input type="checkbox" id="debugLiveAutoRefresh" checked>
+                <span>Live (3s)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Log Console Container -->
+          <div class="debug-console-wrapper">
+            <div class="debug-console-header">
+              <span class="debug-console-title">Console Stream (<span id="debugShowingCount">0</span> entries)</span>
+              <span id="debugCopyFeedback" class="debug-copy-feedback hidden">✓ Copied to clipboard!</span>
+            </div>
+            <div id="debugLogsContainer" class="debug-console-stream">
+              <!-- Rendered dynamically -->
+            </div>
           </div>
         </main>
       </div>

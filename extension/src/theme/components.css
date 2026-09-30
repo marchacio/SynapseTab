@@ -1301,3 +1301,284 @@
 .hidden {
   display: none !important;
 }
+
+/* ==========================================================================
+   14. Debug & Diagnostics Console
+   ========================================================================== */
+
+.debug-actions-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.debug-metric-card {
+  background-color: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--md-sys-color-outline);
+}
+
+.debug-metric-value {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-metric-sub {
+  font-size: 10px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.debug-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.debug-filter-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.debug-filter-chip {
+  background-color: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--md-sys-shape-full);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.debug-filter-chip:hover {
+  background-color: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.debug-filter-chip.active {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-color: var(--md-sys-color-primary);
+  font-weight: 600;
+}
+
+.debug-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.styled-input-sm {
+  background-color: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--md-sys-shape-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  width: 130px;
+}
+
+.styled-input-sm:focus {
+  border-color: var(--md-sys-color-primary);
+  outline: none;
+}
+
+.debug-live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-console-wrapper {
+  background-color: #0b0f17;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.debug-console-header {
+  background-color: #131924;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.debug-console-stream {
+  height: 380px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.debug-log-line {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-log-line:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.debug-log-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debug-log-time {
+  color: #64748b;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.debug-log-badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.debug-badge-error {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.debug-badge-warn {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.debug-badge-sync {
+  background-color: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.debug-badge-info {
+  background-color: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.debug-log-cat {
+  color: #a5b4fc;
+  font-size: 10px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.debug-log-tabs-chip {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-family: monospace;
+  color: #cbd5e1;
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.debug-log-tabs-chip.delta-inc {
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.3);
+  background-color: rgba(74, 222, 128, 0.1);
+}
+
+.debug-log-tabs-chip.delta-dec {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.3);
+  background-color: rgba(248, 113, 113, 0.1);
+}
+
+.debug-log-msg {
+  color: #f1f5f9;
+  word-break: break-word;
+  flex: 1;
+}
+
+.debug-log-details-toggle {
+  font-size: 10px;
+  color: #38bdf8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  text-decoration: underline;
+  outline: none;
+}
+
+.debug-log-details-pre {
+  background-color: #05080f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #a5b4fc;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.debug-copy-feedback {
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.debug-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}

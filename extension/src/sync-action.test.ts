@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineSyncAction } from './sync-action.js';
+import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
 import { SyncPayload } from './types.js';
 
 describe('determineSyncAction Pure Decision Engine', () => {
@@ -175,6 +175,44 @@ describe('determineSyncAction Pure Decision Engine', () => {
         initialSyncCompleted: true,
       });
       expect(action).toBe('push');
+    });
+  });
+
+  describe('isNonSyncUrl URL Filtering', () => {
+    it('identifies undefined, null, and empty string as non-sync URLs', () => {
+      expect(isNonSyncUrl(undefined)).toBe(true);
+      expect(isNonSyncUrl(null)).toBe(true);
+      expect(isNonSyncUrl('')).toBe(true);
+      expect(isNonSyncUrl('   ')).toBe(true);
+    });
+
+    it('identifies about: pages as non-sync URLs', () => {
+      expect(isNonSyncUrl('about:blank')).toBe(true);
+      expect(isNonSyncUrl('about:newtab')).toBe(true);
+      expect(isNonSyncUrl('about:home')).toBe(true);
+      expect(isNonSyncUrl('about:preferences')).toBe(true);
+      expect(isNonSyncUrl('about:preferences#privacy')).toBe(true);
+      expect(isNonSyncUrl('about:config')).toBe(true);
+      expect(isNonSyncUrl('about:addons')).toBe(true);
+      expect(isNonSyncUrl('about:debugging')).toBe(true);
+    });
+
+    it('identifies moz-extension:// pages as non-sync URLs', () => {
+      expect(isNonSyncUrl('moz-extension://a3f5-6789-bcde/popup/index.html')).toBe(true);
+      expect(isNonSyncUrl('moz-extension://some-uuid/settings.html')).toBe(true);
+    });
+
+    it('identifies chrome:// and internal schemes as non-sync URLs', () => {
+      expect(isNonSyncUrl('chrome://browser/content/browser.xhtml')).toBe(true);
+      expect(isNonSyncUrl('resource://gre/modules/Services.jsm')).toBe(true);
+      expect(isNonSyncUrl('view-source:about:blank')).toBe(true);
+    });
+
+    it('allows normal web URLs to trigger sync', () => {
+      expect(isNonSyncUrl('https://github.com/marco/SynapseTab')).toBe(false);
+      expect(isNonSyncUrl('http://localhost:8080')).toBe(false);
+      expect(isNonSyncUrl('https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons')).toBe(false);
+      expect(isNonSyncUrl('http://192.168.1.100:3000')).toBe(false);
     });
   });
 });

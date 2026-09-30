@@ -104,3 +104,35 @@ export interface BackupListResponse {
   config: BackupConfig;
 }
 
+export type DebugLogLevel = 'info' | 'warn' | 'error' | 'sync';
+
+export interface DebugLogEntry {
+  id: string;
+  timestamp: number;
+  level: DebugLogLevel;
+  category: string;
+  message: string;
+  details?: string;
+}
+
+export interface DebugDiagnostics {
+  status: SyncStatus;
+  localVersionState: {
+    version: number;
+    updatedAt: number;
+    hasLocalChanges: boolean;
+    initialSyncCompleted?: boolean;
+  };
+  settings: SynapseSettings;
+  activeWorkspaceId: string;
+  workspacesCount: number;
+  tabsCount: number;
+  uptimeSeconds: number;
+  userAgent: string;
+}
+
+export interface DebugDataResponse {
+  logs: DebugLogEntry[];
+  diagnostics: DebugDiagnostics;
+}
+

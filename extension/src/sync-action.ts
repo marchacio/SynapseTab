@@ -49,6 +49,7 @@ export function determineSyncAction(
     typeof localInstance.version === 'number' &&
     localInstance.version > 0
   ) {
+    console.log(`[SynapseTab] Remote version: ${remoteVersion}, Local version: ${localInstance.version}`);
     if (remoteVersion > localInstance.version) {
       // Server has a newer version (another Firefox instance worked and updated the server) -> pull
       return 'pull';
@@ -86,4 +87,29 @@ export function determineSyncAction(
   }
 
   return 'none';
+}
+
+/**
+ * URL schemes and prefixes that represent internal, empty, settings, or extension pages.
+ * Changes to tabs with these URLs will NOT trigger sync push events to the server.
+ */
+export const NON_SYNC_URL_PREFIXES: readonly string[] = [
+  'about:',
+  'moz-extension://',
+  'chrome://',
+  'resource://',
+  'view-source:about:',
+];
+
+/**
+ * Evaluates whether a URL should be excluded from triggering sync push events.
+ * Empty URLs, Firefox settings (about:*), extension pages (moz-extension://*),
+ * and browser chrome pages are ignored.
+ */
+export function isNonSyncUrl(url?: string | null): boolean {
+  if (!url || url.trim() === '') {
+    return true;
+  }
+  const lower = url.trim().toLowerCase();
+  return NON_SYNC_URL_PREFIXES.some((prefix) => lower.startsWith(prefix));
 }

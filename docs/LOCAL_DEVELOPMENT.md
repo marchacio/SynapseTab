@@ -54,7 +54,7 @@ Expected JSON response:
   "redis": "connected",
   "uptime": 2,
   "timestamp": 1773329000,
-  "version": "1.1.0"
+  "version": "1.2.0"
 }
 ```
 
@@ -113,14 +113,14 @@ npm run dev:client-b
 
 ### Test Scenario 1: Tab Creation & Debounced Sync
 1. In **Client A**, open three tabs (e.g., `https://wikipedia.org`, `https://github.com`, `https://news.ycombinator.com`).
-2. Notice that the extension aggregates tab changes and waits for a **1000ms debounce** window before transmitting to `POST /api/v1/sync`.
+2. Notice that the extension aggregates tab changes and waits for a **DEBOUNCE_DELAY_MS** window before transmitting to `POST /api/v1/sync`.
 3. In **Client B**, wait for the next polling cycle (or click **Sync Now** in the popup).
 4. Notice that **Client B** materializes all three tabs immediately.
 5. Inspect the newly created tabs in Client B: notice they are created with `{ discarded: true }` (suspended state), consuming **zero network requests and zero RAM** until you click on them.
 
 ### Test Scenario 2: Tab Removal
 1. In **Client A**, close the `https://news.ycombinator.com` tab.
-2. After 1000ms debounce, the state is persisted to Redis.
+2. After DEBOUNCE_DELAY_MS, the state is persisted to Redis.
 3. In **Client B**, the tab is automatically identified by the pure diff engine (`tabsToClose`) and closed without affecting other open tabs.
 
 ### Test Scenario 3: Workspace Switching & Tab Hiding
