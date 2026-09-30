@@ -151,9 +151,13 @@ export class WorkspaceManager {
     const storedWorkspaces = await this.getStoredWorkspaces();
     const activeWorkspaceId = await this.getActiveWorkspaceId();
 
-    let tabs = await browser.tabs.query({ currentWindow: true });
-    if (!tabs || tabs.length === 0) {
+    let tabs: browser.tabs.Tab[] = [];
+    try {
       tabs = await browser.tabs.query({});
+    } catch {
+      try {
+        tabs = await browser.tabs.query({ currentWindow: true });
+      } catch {}
     }
 
     const workspaceTabsMap = new Map<string, TabItem[]>();
@@ -172,10 +176,33 @@ export class WorkspaceManager {
         workspaceTabsMap.set(wsId, []);
       }
 
+      let tabUrl = tab.url;
+      let tabTitle = tab.title;
+
+      // If tab.url is missing or blank, check if a real URL was saved in session storage
+      if (!tabUrl || tabUrl === 'about:blank' || tabUrl === 'about:newtab') {
+        try {
+          const savedUrl = await browser.sessions.getTabValue(tab.id, 'tab_url');
+          if (typeof savedUrl === 'string' && savedUrl && savedUrl !== 'about:blank' && savedUrl !== 'about:newtab') {
+            tabUrl = savedUrl;
+            const savedTitle = await browser.sessions.getTabValue(tab.id, 'tab_title');
+            if (typeof savedTitle === 'string' && savedTitle && savedTitle !== 'New Tab') {
+              tabTitle = savedTitle;
+            }
+          }
+        } catch {}
+      } else if (tabUrl && (tabUrl.startsWith('http://') || tabUrl.startsWith('https://'))) {
+        // Cache the latest active/loaded HTTP URL to session value
+        browser.sessions.setTabValue(tab.id, 'tab_url', tabUrl).catch(() => {});
+        if (tabTitle && tabTitle !== 'New Tab') {
+          browser.sessions.setTabValue(tab.id, 'tab_title', tabTitle).catch(() => {});
+        }
+      }
+
       const tabItem: TabItem = {
         uuid,
-        url: tab.url || 'about:blank',
-        title: tab.title || 'New Tab',
+        url: tabUrl || 'about:blank',
+        title: tabTitle || 'New Tab',
         favIconUrl: tab.favIconUrl,
         pinned: Boolean(tab.pinned),
         index: tab.index,
@@ -339,7 +366,6 @@ export class WorkspaceManager {
       try {
         const isSafe = isSafeWebUrl(tab.url);
         const isHttp = Boolean(tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://')));
-        const canDiscard = isHttp;
         let newTab: browser.tabs.Tab;
 
         const createProps: browser.tabs._CreateCreateProperties = {
@@ -350,24 +376,34 @@ export class WorkspaceManager {
           createProps.url = tab.url;
         }
 
+        // Lazy materialization: in Firefox, inactive HTTP tabs can be created directly with discarded: true.
+        // DO NOT call browser.tabs.discard() afterwards, as calling discard while loading cancels the load!
+        if (isHttp && !tab.pinned) {
+          createProps.discarded = true;
+          if (tab.title && tab.title !== 'New Tab') {
+            createProps.title = tab.title;
+          }
+        }
+
         try {
           newTab = await browser.tabs.create(createProps);
         } catch {
-          // Fallback without restricted URL
+          // Fallback without discarded/title if rejected by browser
           newTab = await browser.tabs.create({
             active: false,
             pinned: tab.pinned,
-            url: isSafe ? tab.url : undefined,
+            url: isSafe && tab.url !== 'about:newtab' ? tab.url : undefined,
           });
         }
 
         if (newTab.id !== undefined) {
-          if (canDiscard) {
-            try {
-              await browser.tabs.discard(newTab.id);
-            } catch {}
-          }
           await browser.sessions.setTabValue(newTab.id, 'tab_uuid', tab.uuid);
+          if (tab.url && isSafe) {
+            await browser.sessions.setTabValue(newTab.id, 'tab_url', tab.url);
+          }
+          if (tab.title && tab.title !== 'New Tab') {
+            await browser.sessions.setTabValue(newTab.id, 'tab_title', tab.title);
+          }
           await this.setTabWorkspaceId(newTab.id, workspaceId);
 
           // If created in an inactive workspace, hide it
@@ -445,6 +481,12 @@ export class WorkspaceManager {
 
     // 5. Close tabs planned for removal with zero-tab window prevention safeguard
     const currentTabsBeforeClose = await browser.tabs.query({ currentWindow: true });
+    const extensionTabIds = new Set(
+      currentTabsBeforeClose
+        .filter((t) => t.url && t.url.startsWith(browser.runtime.getURL('')))
+        .map((t) => t.id)
+        .filter((id): id is number => id !== undefined)
+    );
     const tabIdsToClose: number[] = [];
 
     for (const closeAction of plan.tabsToClose) {
@@ -452,7 +494,7 @@ export class WorkspaceManager {
       if (!targetTabId) {
         targetTabId = await this.findTabIdByUuid(closeAction.uuid);
       }
-      if (targetTabId && currentTabsBeforeClose.some((t) => t.id === targetTabId)) {
+      if (targetTabId && currentTabsBeforeClose.some((t) => t.id === targetTabId) && !extensionTabIds.has(targetTabId)) {
         tabIdsToClose.push(targetTabId);
       }
     }
@@ -472,6 +514,7 @@ export class WorkspaceManager {
     }
 
     for (const tabId of tabIdsToClose) {
+      if (extensionTabIds.has(tabId)) continue;
       try {
         await browser.tabs.remove(tabId);
       } catch (err) {
@@ -480,23 +523,29 @@ export class WorkspaceManager {
     }
 
     // 6. Switch active workspace if remote specified a different one and it exists
-    if (plan.activeWorkspaceId && plan.activeWorkspaceId !== activeWsId) {
-      await this.switchToWorkspace(plan.activeWorkspaceId);
-    } else {
-      // Ensure active workspace has an active visible tab
-      const currentWindowTabs = await browser.tabs.query({ currentWindow: true });
-      const activeWsTabs = [];
-      for (const t of currentWindowTabs) {
-        if (t.id === undefined) continue;
-        const wsId = await this.getTabWorkspaceId(t.id, targetActiveWs);
-        if (wsId === targetActiveWs && !t.hidden) {
-          activeWsTabs.push(t);
+    // (Preserve focus if extension UI tab is currently active)
+    const hasActiveExtensionTab = currentTabsBeforeClose.some(
+      (t) => t.active && t.url && t.url.startsWith(browser.runtime.getURL(''))
+    );
+    if (!hasActiveExtensionTab) {
+      if (plan.activeWorkspaceId && plan.activeWorkspaceId !== activeWsId) {
+        await this.switchToWorkspace(plan.activeWorkspaceId);
+      } else {
+        // Ensure active workspace has an active visible tab
+        const currentWindowTabs = await browser.tabs.query({ currentWindow: true });
+        const activeWsTabs = [];
+        for (const t of currentWindowTabs) {
+          if (t.id === undefined) continue;
+          const wsId = await this.getTabWorkspaceId(t.id, targetActiveWs);
+          if (wsId === targetActiveWs && !t.hidden) {
+            activeWsTabs.push(t);
+          }
         }
-      }
-      if (activeWsTabs.length > 0 && !activeWsTabs.some((t) => t.active)) {
-        try {
-          await browser.tabs.update(activeWsTabs[0].id!, { active: true });
-        } catch {}
+        if (activeWsTabs.length > 0 && !activeWsTabs.some((t) => t.active)) {
+          try {
+            await browser.tabs.update(activeWsTabs[0].id!, { active: true });
+          } catch {}
+        }
       }
     }
   }
@@ -635,16 +684,27 @@ export class WorkspaceManager {
       const isHttp = url.startsWith('http://') || url.startsWith('https://');
       const isAbout = url.startsWith('about:');
       const safeUrl = isHttp || isAbout || url.startsWith('moz-extension://') ? url : 'about:blank';
-      const canDiscard = isHttp && !isActive;
 
       let newTab: browser.tabs.Tab | undefined;
 
+      const createProps: browser.tabs._CreateCreateProperties = {
+        active: isActive,
+        pinned: isPinned,
+      };
+      if (safeUrl !== 'about:newtab') {
+        createProps.url = safeUrl;
+      }
+
+      // Lazy materialization: in Firefox, inactive HTTP tabs can be created directly with discarded: true.
+      if (isHttp && !isActive && !isPinned) {
+        createProps.discarded = true;
+        if (title && title !== 'New Tab') {
+          createProps.title = title;
+        }
+      }
+
       try {
-        newTab = await browser.tabs.create({
-          url: safeUrl === 'about:newtab' ? undefined : safeUrl,
-          active: isActive,
-          pinned: isPinned,
-        });
+        newTab = await browser.tabs.create(createProps);
       } catch {
         try {
           newTab = await browser.tabs.create({
@@ -659,12 +719,13 @@ export class WorkspaceManager {
       }
 
       if (newTab && newTab.id !== undefined) {
-        if (canDiscard) {
-          try {
-            await browser.tabs.discard(newTab.id);
-          } catch {}
-        }
         await browser.sessions.setTabValue(newTab.id, 'tab_uuid', uuid);
+        if (safeUrl && safeUrl !== 'about:blank' && safeUrl !== 'about:newtab') {
+          await browser.sessions.setTabValue(newTab.id, 'tab_url', safeUrl);
+        }
+        if (title && title !== 'New Tab') {
+          await browser.sessions.setTabValue(newTab.id, 'tab_title', title);
+        }
         await this.setTabWorkspaceId(newTab.id, wsId);
         return newTab.id;
       }
@@ -677,6 +738,10 @@ export class WorkspaceManager {
       const oldTabIds = existingTabs
         .filter((t) => t.id !== undefined)
         .map((t) => t.id as number);
+
+      const extensionTabs = existingTabs.filter((t) => t.url && t.url.startsWith(browser.runtime.getURL('')));
+      const extensionTabIds = new Set(extensionTabs.map((t) => t.id).filter((id): id is number => id !== undefined));
+      const hasActiveExtensionTab = extensionTabs.some((t) => t.active);
 
       const targetActiveWs = (preferredActiveWorkspaceId && importedWorkspaces.some((w) => w.id === preferredActiveWorkspaceId))
         ? preferredActiveWorkspaceId
@@ -706,23 +771,24 @@ export class WorkspaceManager {
 
       for (let i = 0; i < activeWs.tabs.length; i++) {
         const tab = activeWs.tabs[i];
-        const isFirst = i === 0;
+        // If an extension tab is active in foreground (e.g. restoring backup), do NOT steal focus!
+        const shouldActivate = !hasActiveExtensionTab && i === 0;
         const createdId = await createSafeTab(
           tab.url,
           tab.title,
-          isFirst,
+          shouldActivate,
           false,
           targetActiveWs,
           tab.uuid || crypto.randomUUID()
         );
         if (createdId !== undefined) {
           createdTabIds.add(createdId);
-          if (isFirst) activeTabCreated = true;
+          if (shouldActivate) activeTabCreated = true;
         }
       }
 
-      // Fallback if active workspace had no tabs created
-      if (!activeTabCreated) {
+      // Fallback if active workspace had no tabs created and no extension tab is active
+      if (!activeTabCreated && !hasActiveExtensionTab) {
         const fallbackId = await createSafeTab(
           'about:blank',
           'New Tab',
@@ -764,8 +830,11 @@ export class WorkspaceManager {
         }
       }
 
-      // 6. Close ONLY the old tabs that existed prior to import
+      // 6. Close ONLY the old tabs that existed prior to import (preserving extension UI tabs)
       for (const oldId of oldTabIds) {
+        if (extensionTabIds.has(oldId)) {
+          continue; // Preserve SynapseTab tab in foreground!
+        }
         if (!createdTabIds.has(oldId)) {
           try {
             await browser.tabs.remove(oldId);
@@ -785,6 +854,16 @@ export class WorkspaceManager {
         }))
       );
       await this.setActiveWorkspaceId(targetActiveWs);
+
+      // 8. Ensure extension UI tab stays active in foreground if it was open
+      if (hasActiveExtensionTab) {
+        const currentActiveExt = extensionTabs.find((t) => t.active) || extensionTabs[0];
+        if (currentActiveExt && currentActiveExt.id !== undefined) {
+          try {
+            await browser.tabs.update(currentActiveExt.id, { active: true });
+          } catch {}
+        }
+      }
 
     } else {
       // MODE: 'merge'

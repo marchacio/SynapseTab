@@ -5,6 +5,7 @@ export interface LocalInstanceVersion {
   updatedAt: number;
   hasLocalChanges?: boolean;
   initialSyncCompleted?: boolean;
+  isLocalSessionMissingTabs?: boolean;
 }
 
 export type SyncAction = 'pull' | 'push' | 'none';
@@ -15,6 +16,8 @@ export type SyncAction = 'pull' | 'push' | 'none';
  * - If server has no snapshot yet (null / empty), push initial snapshot ('push').
  * - If this client is freshly installed / configured and has not completed an initial sync,
  *   it must pull the latest snapshot from the server ('pull') to avoid overwriting remote state.
+ * - If the local browser session is completely missing remote tabs (e.g. fresh launch without session restore),
+ *   it must pull from the server ('pull') to restore the workspaces and tabs.
  * - If the server contains a newer version than the local instance, pull it ('pull').
  * - If the local instance is newer than the server (e.g. unpushed changes or higher version), push it ('push').
  * - If the local instance is the same as the server (equal versions/timestamps and no unpushed changes),
@@ -37,6 +40,15 @@ export function determineSyncAction(
 
   if (isInitial) {
     return 'pull';
+  }
+
+  // If local browser session is missing remote workspaces/tabs (e.g. fresh start without session restore),
+  // it must pull to materialize the remote workspaces and tabs.
+  if (localInstance.isLocalSessionMissingTabs && serverSnapshot) {
+    const remoteTabCount = (serverSnapshot.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
+    if (remoteTabCount > 0) {
+      return 'pull';
+    }
   }
 
   const remoteVersion = serverSnapshot.version;

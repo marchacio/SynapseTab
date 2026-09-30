@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
-import { SyncPayload } from './types.js';
+import { determineSyncAction, isNonSyncUrl } from '../src/sync-action.js';
+import { SyncPayload } from '../src/types.js';
 
 describe('determineSyncAction Pure Decision Engine', () => {
   const createMockSnapshot = (version?: number, updatedAt: number = 1000): SyncPayload => ({
@@ -129,6 +129,34 @@ describe('determineSyncAction Pure Decision Engine', () => {
         initialSyncCompleted: true,
       });
       expect(action).toBe('pull');
+    });
+
+    it('returns pull when versions match but local session is missing remote tabs (e.g. restart without session restore)', () => {
+      const serverSnapshot = createMockSnapshot(5, 1000);
+      serverSnapshot.workspaces[0].tabs = [
+        { uuid: 'tab-1', url: 'https://example.com', title: 'Example', pinned: false, index: 0 },
+      ];
+      const action = determineSyncAction(serverSnapshot, {
+        version: 5,
+        updatedAt: 1000,
+        hasLocalChanges: false,
+        initialSyncCompleted: true,
+        isLocalSessionMissingTabs: true,
+      });
+      expect(action).toBe('pull');
+    });
+
+    it('returns none when versions match and isLocalSessionMissingTabs is true but server has 0 tabs', () => {
+      const serverSnapshot = createMockSnapshot(5, 1000);
+      serverSnapshot.workspaces[0].tabs = [];
+      const action = determineSyncAction(serverSnapshot, {
+        version: 5,
+        updatedAt: 1000,
+        hasLocalChanges: false,
+        initialSyncCompleted: true,
+        isLocalSessionMissingTabs: true,
+      });
+      expect(action).toBe('none');
     });
   });
 

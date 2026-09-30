@@ -4,8 +4,8 @@ import {
   getContrastingTextColor,
   hslToRgb,
   renderWorkspaceIcon,
-} from './action-icon.js';
-import { StoredWorkspace } from './workspaces.js';
+} from '../src/action-icon.js';
+import { StoredWorkspace } from '../src/workspaces.js';
 
 describe('Action Icon Unit Tests', () => {
   describe('hslToRgb', () => {

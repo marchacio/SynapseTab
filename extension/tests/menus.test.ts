@@ -5,8 +5,8 @@ import {
   isTabMovableToWorkspace,
   ROOT_MENU_ID,
   WORKSPACE_MENU_PREFIX,
-} from './menus.js';
-import { StoredWorkspace } from './workspaces.js';
+} from '../src/menus.js';
+import { StoredWorkspace } from '../src/workspaces.js';
 
 describe('Menus Module Unit Tests', () => {
   describe('Constants', () => {

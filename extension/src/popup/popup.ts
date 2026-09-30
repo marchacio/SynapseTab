@@ -119,6 +119,157 @@ const previewGroupsChips = document.getElementById('previewGroupsChips') as HTML
 const executeImportBtn = document.getElementById('executeImportBtn') as HTMLButtonElement;
 const importFeedbackMsg = document.getElementById('importFeedbackMsg') as HTMLElement;
 
+// Restore Loading Screen Overlay Elements
+const restoreLoadingOverlay = document.getElementById('restoreLoadingOverlay') as HTMLElement;
+const restoreIconCenter = document.getElementById('restoreIconCenter') as HTMLElement;
+const restoreLoadingTitle = document.getElementById('restoreLoadingTitle') as HTMLElement;
+const restoreLoadingStatus = document.getElementById('restoreLoadingStatus') as HTMLElement;
+const restoreProgressBar = document.getElementById('restoreProgressBar') as HTMLElement;
+const restoreLoadingDetail = document.getElementById('restoreLoadingDetail') as HTMLElement;
+const restoreCompletedActions = document.getElementById('restoreCompletedActions') as HTMLElement;
+const restoreDoneBtn = document.getElementById('restoreDoneBtn') as HTMLButtonElement;
+
+function showRestoreLoadingScreen(title: string, status: string, detail?: string): void {
+  restoreLoadingTitle.textContent = title;
+  restoreLoadingStatus.textContent = status;
+  if (detail) {
+    restoreLoadingDetail.textContent = detail;
+  }
+  restoreIconCenter.className = 'restore-icon-center';
+  restoreIconCenter.style.background = '';
+  restoreIconCenter.innerHTML = `
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+      <polyline points="7 10 12 15 17 10"></polyline>
+      <line x1="12" y1="15" x2="12" y2="3"></line>
+    </svg>`;
+  restoreProgressBar.className = 'restore-progress-bar indeterminate';
+  restoreProgressBar.style.background = '';
+  restoreProgressBar.style.width = '';
+  restoreCompletedActions.classList.add('hidden');
+  restoreLoadingOverlay.classList.remove('hidden');
+}
+
+function completeRestoreLoadingScreen(title: string, status: string, detail?: string, onDone?: () => void): void {
+  restoreLoadingTitle.textContent = title;
+  restoreLoadingStatus.textContent = status;
+  if (detail) {
+    restoreLoadingDetail.textContent = detail;
+  }
+  restoreIconCenter.className = 'restore-icon-center success';
+  restoreIconCenter.innerHTML = `
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7bd88f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>`;
+  restoreProgressBar.className = 'restore-progress-bar success';
+  restoreCompletedActions.classList.remove('hidden');
+  restoreDoneBtn.textContent = 'Go to Workspaces';
+
+  let handled = false;
+  const handleDone = () => {
+    if (handled) return;
+    handled = true;
+    restoreLoadingOverlay.classList.add('hidden');
+    if (onDone) onDone();
+  };
+
+  restoreDoneBtn.onclick = handleDone;
+
+  // Automatically transition after 2 seconds if user does not click
+  setTimeout(() => {
+    if (!restoreLoadingOverlay.classList.contains('hidden')) {
+      handleDone();
+    }
+  }, 2200);
+}
+
+function failRestoreLoadingScreen(title: string, errorMsg: string): void {
+  restoreLoadingTitle.textContent = title;
+  restoreLoadingStatus.textContent = errorMsg;
+  restoreLoadingDetail.textContent = 'Please check your connection and debug logs for details.';
+  restoreIconCenter.className = 'restore-icon-center';
+  restoreIconCenter.style.background = 'rgba(255, 180, 171, 0.2)';
+  restoreIconCenter.innerHTML = `
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffb4ab" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="15" y1="9" x2="9" y2="15"></line>
+      <line x1="9" y1="9" x2="15" y2="15"></line>
+    </svg>`;
+  restoreProgressBar.className = 'restore-progress-bar';
+  restoreProgressBar.style.background = '#ffb4ab';
+  restoreProgressBar.style.width = '100%';
+  restoreCompletedActions.classList.remove('hidden');
+  restoreDoneBtn.textContent = 'Dismiss';
+  restoreDoneBtn.onclick = () => {
+    restoreLoadingOverlay.classList.add('hidden');
+  };
+}
+
+async function executeRestoreWithLoadingScreen(backupId: string, label: string): Promise<void> {
+  showRestoreLoadingScreen(
+    'Restoring Workspaces & Tabs',
+    `Applying ${label}...`,
+    'Materializing tabs in suspended state to ensure zero RAM exhaustion. SynapseTab will remain in foreground.'
+  );
+
+  try {
+    const res = await browser.runtime.sendMessage({
+      type: 'RESTORE_BACKUP',
+      backupId,
+    });
+    if (res?.error) {
+      throw new Error(res.error);
+    }
+    await refreshState();
+    completeRestoreLoadingScreen(
+      'Backup Restored Successfully!',
+      'All workspaces and tabs are now synchronized.',
+      'Tabs have been restored in suspended state and are ready to use.',
+      async () => {
+        await switchSection('workspaces');
+        await refreshState();
+      }
+    );
+  } catch (err: any) {
+    failRestoreLoadingScreen('Restore Failed', err.message || 'An error occurred during restore.');
+  }
+}
+
+async function executeStgImportWithLoadingScreen(
+  stgData: string,
+  mode: 'replace' | 'merge',
+  info: { groupCount: number; tabCount: number; pinnedCount: number }
+): Promise<void> {
+  showRestoreLoadingScreen(
+    'Importing Workspaces & Tabs',
+    `Restoring ${info.groupCount} workspaces and ${info.tabCount + info.pinnedCount} tabs (${mode} mode)...`,
+    'Materializing tabs in suspended state. SynapseTab will remain in foreground.'
+  );
+
+  try {
+    const res = await browser.runtime.sendMessage({
+      type: 'IMPORT_STG',
+      stgData,
+      mode,
+    });
+    if (res?.error) {
+      throw new Error(res.error);
+    }
+    await refreshState();
+    completeRestoreLoadingScreen(
+      'Import Completed Successfully!',
+      `Restored ${res.workspacesCount} workspaces and ${res.tabsCount + res.pinnedCount} tabs.`,
+      'Clean state has been synchronized and persisted.',
+      async () => {
+        await switchSection('workspaces');
+        await refreshState();
+      }
+    );
+  } catch (err: any) {
+    failRestoreLoadingScreen('Import Failed', err.message || 'Failed to import backup.');
+  }
+}
+
 // Debug Page Elements
 const openDebugFromSettingsBtn = document.getElementById('openDebugFromSettingsBtn') as HTMLButtonElement | null;
 const refreshDebugBtn = document.getElementById('refreshDebugBtn') as HTMLButtonElement;
@@ -794,21 +945,17 @@ async function loadAndRenderBackups(): Promise<void> {
       restoreBtn.addEventListener('click', async () => {
         const formatted = date.toLocaleString();
         if (confirm(`Restore snapshot from ${formatted}? Current tabs will synchronize with this backup.`)) {
-          restoreBtn.disabled = true;
-          restoreBtn.textContent = 'Restoring...';
-          try {
-            await browser.runtime.sendMessage({
-              type: 'RESTORE_BACKUP',
-              backupId: bk.id,
+          if (!document.body.classList.contains('tab-mode')) {
+            // Open full-page tab to stay in foreground and show the restore loading screen
+            await browser.tabs.create({
+              url: browser.runtime.getURL(`popup/index.html?mode=tab&section=backups&restoreBackupId=${encodeURIComponent(bk.id)}`),
+              active: true,
             });
-            await switchSection('workspaces');
-            await refreshState();
-          } catch (err: any) {
-            alert(`Restore failed: ${err.message}`);
-          } finally {
-            restoreBtn.disabled = false;
-            restoreBtn.textContent = 'Restore';
+            window.close();
+            return;
           }
+
+          await executeRestoreWithLoadingScreen(bk.id, `Backup from ${formatted}`);
         }
       });
 
@@ -1369,35 +1516,7 @@ executeImportBtn.addEventListener('click', async () => {
 
   if (!confirm(confirmMsg)) return;
 
-  executeImportBtn.disabled = true;
-  executeImportBtn.textContent = 'Importing tabs & workspaces...';
-
-  try {
-    const res = await browser.runtime.sendMessage({
-      type: 'IMPORT_STG',
-      stgData: rawImportedJson,
-      mode,
-    });
-
-    if (res.error) {
-      throw new Error(res.error);
-    }
-
-    importFeedbackMsg.className = 'import-feedback success';
-    importFeedbackMsg.textContent = `Successfully imported ${res.workspacesCount} workspaces and ${res.pinnedCount} pinned tabs!`;
-    importFeedbackMsg.classList.remove('hidden');
-
-    setTimeout(async () => {
-      await switchSection('workspaces');
-    }, 1200);
-  } catch (err: any) {
-    importFeedbackMsg.className = 'import-feedback error';
-    importFeedbackMsg.textContent = `Import failed: ${err.message}`;
-    importFeedbackMsg.classList.remove('hidden');
-  } finally {
-    executeImportBtn.disabled = false;
-    executeImportBtn.textContent = '🚀 Import into SynapseTab';
-  }
+  await executeStgImportWithLoadingScreen(rawImportedJson, mode, loadedStgResult);
 });
 
 // Create Backup Manual Action
@@ -1717,6 +1836,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadAndDisplaySettings();
   await refreshState();
+
+  // If opened with restoreBackupId, trigger restore in foreground with loading screen
+  const restoreBackupId = urlParams.get('restoreBackupId');
+  if (restoreBackupId) {
+    window.history.replaceState({}, document.title, window.location.pathname + '?mode=tab&section=backups');
+    await executeRestoreWithLoadingScreen(restoreBackupId, 'Selected Server Backup');
+  }
 });
 
 // Reactively update popup UI when remote sync or background updates modify storage

@@ -224,6 +224,13 @@ async function pushSync(): Promise<void> {
       updatedAtToPush
     );
 
+    const totalTabs = localState.workspaces.reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
+    if (totalTabs === 0) {
+      console.warn('[SynapseTab] Aborting pushSync: total tab count across all workspaces is 0. Window is closing or empty.');
+      addDebugLog('warn', 'sync', 'Aborted pushSync: total tab count across all workspaces is 0 (window closing or empty).');
+      return;
+    }
+
     const pushRes = await SynapseApiClient.pushLocalState(settings, localState);
     const confirmedVersion = pushRes.version ?? versionToPush;
     const confirmedUpdatedAt = pushRes.updated_at ?? updatedAtToPush;
@@ -369,15 +376,33 @@ function setupTabListeners(): void {
 
     knownNonSyncTabIds.delete(tabId);
 
-    // Only react to significant updates (url, title, pinned, status = complete)
-    if (changeInfo.url || changeInfo.title || changeInfo.pinned !== undefined || changeInfo.status === 'complete') {
+    // Only react to significant user/content updates (url, meaningful title change, pinned)
+    if (changeInfo.url || (changeInfo.title && changeInfo.title !== 'New Tab') || changeInfo.pinned !== undefined) {
       addDebugLog('info', 'tabs', `Tab updated: ${effectiveUrl || 'page'} [Tab #${tabId}]`);
       onTabChange();
     }
   });
 
-  browser.tabs.onRemoved.addListener((tabId, _removeInfo) => {
+  browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     currentTabCount = Math.max(0, currentTabCount - 1);
+
+    if (removeInfo && removeInfo.isWindowClosing) {
+      // Entire window is closing (Firefox exiting or closing window). Cancel debounce timer!
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      knownNonSyncTabIds.delete(tabId);
+      return;
+    }
+
+    if (currentTabCount === 0) {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      return;
+    }
 
     if (knownNonSyncTabIds.has(tabId)) {
       knownNonSyncTabIds.delete(tabId);
@@ -415,35 +440,107 @@ function setupTabListeners(): void {
  * Setup lifecycle listeners to push state when Firefox or windows close.
  */
 function setupLifecycleListeners(): void {
-  // Flush pending changes when any window is closed
+  // If a window is removed, check if any normal windows remain
   browser.windows.onRemoved.addListener(async () => {
+    try {
+      const normalWindows = await browser.windows.getAll({ windowTypes: ['normal'] });
+      if (normalWindows.length === 0) {
+        // Last window closed: Firefox is quitting.
+        // Clear any pending debounce timer to prevent pushing an empty state!
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
+        return;
+      }
+    } catch { }
+
     if (debounceTimer) {
       clearTimeout(debounceTimer);
       debounceTimer = null;
       await pushSync();
-    } else {
-      const versionState = await getLocalVersionState();
-      if (versionState.hasLocalChanges) {
-        await pushSync();
-      }
     }
   });
 
   // Flush pending changes on extension suspend / shutdown
   if (typeof browser.runtime.onSuspend !== 'undefined' && browser.runtime.onSuspend.addListener) {
     browser.runtime.onSuspend.addListener(() => {
+      // Browser or extension is shutting down. Cancel pending debounce timer!
       if (debounceTimer) {
         clearTimeout(debounceTimer);
         debounceTimer = null;
       }
-      pushSync().catch(() => { });
     });
   }
 }
 
 /**
+ * Evaluates whether the local browser session is missing remote workspaces/tabs
+ * (for example, if Firefox started fresh without session restore, after a crash, or on a clean profile).
+ */
+async function checkLocalSessionMissingTabs(remoteState: SyncPayload | null): Promise<boolean> {
+  if (!remoteState) return false;
+  const remoteTabsCount = (remoteState.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
+  if (remoteTabsCount === 0) return false;
+
+  const remoteUuids = new Set<string>();
+  for (const ws of (remoteState.workspaces || [])) {
+    for (const t of (ws.tabs || [])) {
+      if (t.uuid) remoteUuids.add(t.uuid);
+    }
+  }
+
+  const allLocalTabs = await browser.tabs.query({});
+  let matchingCount = 0;
+  for (const tab of allLocalTabs) {
+    if (tab.id !== undefined) {
+      const uuid = await browser.sessions.getTabValue(tab.id, 'tab_uuid');
+      if (typeof uuid === 'string' && remoteUuids.has(uuid)) {
+        matchingCount++;
+      }
+    }
+  }
+
+  // If local browser has fewer matching tabs than the remote state, tabs are missing!
+  if (matchingCount < remoteTabsCount) {
+    addDebugLog(
+      'info',
+      'startup',
+      `Session tab disparity detected: only ${matchingCount}/${remoteTabsCount} remote tabs present locally.`
+    );
+    return true;
+  }
+
+  // Also check if any remote workspace with tabs is completely missing locally
+  for (const ws of (remoteState.workspaces || [])) {
+    if (ws.tabs && ws.tabs.length > 0) {
+      const wsUuids = new Set(ws.tabs.map((t) => t.uuid).filter(Boolean));
+      let wsMatch = 0;
+      for (const tab of allLocalTabs) {
+        if (tab.id !== undefined) {
+          const uuid = await browser.sessions.getTabValue(tab.id, 'tab_uuid');
+          if (typeof uuid === 'string' && wsUuids.has(uuid)) {
+            wsMatch++;
+          }
+        }
+      }
+      if (wsMatch === 0) {
+        addDebugLog(
+          'info',
+          'startup',
+          `Workspace "${ws.name}" (${ws.tabs.length} tabs) has 0 tabs locally.`
+        );
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Handles the manual Synchronize button click:
- * - If server contains a newer version, pull it.
+ * - If server contains a newer version or local session is missing tabs, pull it.
  * - If local is newer (e.g. offline changes or higher version), push it to the server.
  * - If local is identical to server, do nothing.
  */
@@ -454,26 +551,34 @@ async function handleSynchronizeButton(): Promise<SyncStatus> {
     const remoteState = await SynapseApiClient.fetchRemoteState(settings);
 
     const versionState = await getLocalVersionState();
+    const isMissingTabs = await checkLocalSessionMissingTabs(remoteState);
     const action = determineSyncAction(remoteState, {
       version: versionState.version,
       updatedAt: versionState.updatedAt,
       hasLocalChanges: versionState.hasLocalChanges || debounceTimer !== null,
       initialSyncCompleted: versionState.initialSyncCompleted,
+      isLocalSessionMissingTabs: isMissingTabs,
     });
 
     if (action === 'pull' && remoteState) {
-      console.log(
-        `[SynapseTab] Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`
+      addDebugLog(
+        'sync',
+        'manual',
+        `Sync requested: pulling from server (v${remoteState.version ?? remoteState.updated_at}).`
       );
       await pullSync(true, remoteState);
     } else if (action === 'push') {
-      console.log(
-        `[SynapseTab] Local instance is newer or server uninitialized. Pushing...`
+      addDebugLog(
+        'sync',
+        'manual',
+        `Sync requested: pushing local state to server.`
       );
       await pushSync();
     } else {
-      console.log(
-        `[SynapseTab] Local instance is already identical to server (v${versionState.version}). No sync required.`
+      addDebugLog(
+        'info',
+        'manual',
+        `Sync requested: local instance is identical to server (v${versionState.version}). No sync required.`
       );
       await updateStatus({
         state: 'synced',
@@ -486,6 +591,7 @@ async function handleSynchronizeButton(): Promise<SyncStatus> {
     return currentStatus;
   } catch (err: any) {
     console.error('[SynapseTab Sync Error]', err.message);
+    addDebugLog('error', 'manual', `Synchronization failed: ${err.message}`, err.stack || err);
     await updateStatus({
       state: 'error',
       errorMessage: err.message || 'Synchronization failed',
@@ -675,6 +781,11 @@ function setupMessageListener(): void {
             });
           }
 
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+          }
+
           isApplyingRemoteDiff = true;
           try {
             await WorkspaceManager.importWorkspacesAndTabs(
@@ -684,9 +795,26 @@ function setupMessageListener(): void {
               restoredSnapshot.active_workspace_id
             );
           } finally {
-            setTimeout(() => {
+            setTimeout(async () => {
               isApplyingRemoteDiff = false;
-              refreshTabCount().then(() => triggerPushSync());
+              await refreshTabCount();
+              // Update local version tracking to match the restored snapshot directly
+              await setLocalVersionState({
+                version: restoredSnapshot.version ?? 1,
+                updatedAt: restoredSnapshot.updated_at,
+                hasLocalChanges: false,
+                initialSyncCompleted: true,
+              });
+              await updateStatus({
+                state: 'synced',
+                lastSyncTime: Date.now(),
+                errorMessage: null,
+              });
+              addDebugLog(
+                'sync',
+                'restore',
+                `Restored backup (${message.backupId}) with ${workspaces.length} workspaces and ${pinnedTabs.length} pinned tabs.`
+              );
             }, 600);
           }
 
@@ -821,21 +949,24 @@ async function init(): Promise<void> {
       throw fetchErr;
     }
 
+    const remoteTotalTabs = (remoteState?.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
+    const isMissingTabs = await checkLocalSessionMissingTabs(remoteState);
+
     const action = determineSyncAction(remoteState, {
       version: versionState.version,
       updatedAt: versionState.updatedAt,
       hasLocalChanges: versionState.hasLocalChanges,
       initialSyncCompleted: versionState.initialSyncCompleted,
+      isLocalSessionMissingTabs: isMissingTabs,
     });
 
     console.log(`[SynapseTab] Startup sync evaluation: action = ${action}`);
 
     if (action === 'pull' && remoteState) {
-      addDebugLog(
-        'sync',
-        'startup',
-        `Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`
-      );
+      const reason = isMissingTabs
+        ? `Local browser is missing remote workspaces/tabs (${remoteTotalTabs} remote tabs). Restoring session...`
+        : `Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`;
+      addDebugLog('sync', 'startup', reason);
       await pullSync(true, remoteState);
     } else if (action === 'push') {
       addDebugLog(

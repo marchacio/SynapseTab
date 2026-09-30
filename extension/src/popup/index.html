@@ -541,6 +541,39 @@
         </div>
       </div>
     </div>
+
+    <!-- Full-Screen Restore Loading Overlay -->
+    <div id="restoreLoadingOverlay" class="restore-loading-overlay hidden">
+      <div class="restore-loading-backdrop"></div>
+      <div class="restore-loading-card">
+        <div class="restore-icon-container">
+          <div class="restore-spinner-ring"></div>
+          <div class="restore-icon-center" id="restoreIconCenter">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </div>
+        </div>
+
+        <h2 id="restoreLoadingTitle" class="restore-loading-title">Restoring Workspaces & Tabs</h2>
+        <p id="restoreLoadingStatus" class="restore-loading-status">Materializing tabs in suspended state. Please wait...</p>
+
+        <div class="restore-progress-container">
+          <div id="restoreProgressBar" class="restore-progress-bar indeterminate"></div>
+        </div>
+
+        <div id="restoreLoadingDetail" class="restore-loading-detail">
+          This operation keeps tabs unloaded to preserve memory and network bandwidth. SynapseTab will remain in foreground.
+        </div>
+
+        <div id="restoreCompletedActions" class="restore-completed-actions hidden">
+          <button type="button" id="restoreDoneBtn" class="btn btn-primary">Go to Workspaces</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./popup.ts"></script>

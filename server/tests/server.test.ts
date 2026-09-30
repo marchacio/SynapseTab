@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
 import RedisMock from 'ioredis-mock';
-import { buildServer } from './index.js';
-import { SyncPayload } from './types.js';
-import { closeRedis, setBackupConfig, saveWorkspaceSnapshot } from './redis.js';
-import { BackupScheduler } from './backup-scheduler.js';
+import { buildServer } from '../src/index.js';
+import { SyncPayload } from '../src/types.js';
+import { closeRedis, setBackupConfig, saveWorkspaceSnapshot } from '../src/redis.js';
+import { BackupScheduler } from '../src/backup-scheduler.js';
 
 describe('SynapseTab Server Integration Tests', () => {
   let app: FastifyInstance;
