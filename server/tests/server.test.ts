@@ -70,7 +70,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const data = response.json();
       expect(data.status).toBe('healthy');
       expect(data.redis).toBe('connected');
-      expect(data.version).toBe('1.2.0');
+      expect(data.version).toBe('1.3.0');
       expect(typeof data.uptime).toBe('number');
     });
   });
@@ -291,6 +291,58 @@ describe('SynapseTab Server Integration Tests', () => {
       });
       expect(aliceRes.statusCode).toBe(200);
       expect(aliceRes.json().client_id).toBe('user-a-device');
+    });
+
+    it('DELETE /api/v1/sync deletes the user workspace snapshot from Redis', async () => {
+      const targetUserId = 'user-to-destroy';
+
+      // 1. Seed snapshot
+      const postRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': targetUserId,
+        },
+        payload: samplePayload,
+      });
+      expect(postRes.statusCode).toBe(200);
+
+      // 2. Verify snapshot exists
+      const getResBefore = await app.inject({
+        method: 'GET',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': targetUserId,
+        },
+      });
+      expect(getResBefore.statusCode).toBe(200);
+
+      // 3. Delete snapshot
+      const delRes = await app.inject({
+        method: 'DELETE',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': targetUserId,
+        },
+      });
+      expect(delRes.statusCode).toBe(200);
+      const delData = delRes.json();
+      expect(delData.status).toBe('ok');
+      expect(delData.deleted).toBe(true);
+
+      // 4. Verify snapshot is gone (404 Not Found)
+      const getResAfter = await app.inject({
+        method: 'GET',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': targetUserId,
+        },
+      });
+      expect(getResAfter.statusCode).toBe(404);
     });
   });
 

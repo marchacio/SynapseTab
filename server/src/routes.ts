@@ -11,6 +11,7 @@ import {
 import {
   saveWorkspaceSnapshot,
   getWorkspaceSnapshot,
+  deleteWorkspaceSnapshot,
   pingRedis,
   saveBackup,
   listBackups,
@@ -59,7 +60,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       redis: isRedisConnected ? 'connected' : 'disconnected',
       uptime: Math.floor(process.uptime()),
       timestamp: Math.floor(Date.now() / 1000),
-      version: '1.2.0',
+      version: '1.3.0',
     };
 
     if (!isRedisConnected) {
@@ -112,6 +113,24 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       return reply.status(200).send(snapshot);
+    }
+  );
+
+  // DELETE /api/v1/sync - Deletes the active workspace snapshot from Redis
+  fastify.delete(
+    '/api/v1/sync',
+    {
+      preHandler: [authenticateBearer],
+    },
+    async (request, reply) => {
+      const userId = (request.headers['x-user-id'] as string) || config.defaultUserId;
+      const deleted = await deleteWorkspaceSnapshot(userId);
+
+      return reply.status(200).send({
+        status: 'ok',
+        deleted,
+        message: `Workspaces for user ${userId} deleted from remote server`,
+      });
     }
   );
 

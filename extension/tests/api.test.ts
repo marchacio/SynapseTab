@@ -61,4 +61,35 @@ describe('SynapseApiClient URL Normalization and Auto-Healing', () => {
     expect(result.effectiveUrl).toBe('https://secure.synapsetab.org');
     expect(result.autoSwitchedProtocol).toBe(true);
   });
+
+  it('deleteRemoteWorkspaces sends DELETE /api/v1/sync with auth and user headers', async () => {
+    let capturedUrl = '';
+    let capturedInit: RequestInit | undefined;
+
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok', deleted: true, message: 'Workspaces deleted' }),
+      });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await SynapseApiClient.deleteRemoteWorkspaces({
+      backendUrl: 'http://localhost:8080',
+      syncSecret: 'test-secret',
+      clientId: 'client-1',
+      userId: 'custom-user',
+      pollIntervalSeconds: 15,
+    });
+
+    expect(res.status).toBe('ok');
+    expect(capturedUrl).toBe('http://localhost:8080/api/v1/sync');
+    expect(capturedInit?.method).toBe('DELETE');
+    expect((capturedInit?.headers as any)?.Authorization).toBe('Bearer test-secret');
+    expect((capturedInit?.headers as any)?.['X-User-Id']).toBe('custom-user');
+  });
 });
