@@ -280,6 +280,7 @@
 }
 
 .nav-item.nav-item-danger {
+  margin-top: auto;
   color: var(--md-sys-color-error);
 }
 
@@ -296,6 +297,11 @@
 
 .nav-item.nav-item-danger.active svg {
   stroke: var(--md-sys-color-on-error-container);
+}
+
+.nav-spacer {
+  flex: 1;
+  min-height: 24px;
 }
 
 /* ==========================================================================

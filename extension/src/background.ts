@@ -575,6 +575,87 @@ async function handlePushNowButton(): Promise<SyncStatus> {
 }
 
 /**
+ * Handles the manual "Pull remote changes" button click:
+ * Looks for the version on the server:
+ * - If server has a newer version, downloads and applies it.
+ * - If server version is minor or equal, does nothing.
+ */
+async function handlePullNowButton(): Promise<{
+  pulled: boolean;
+  remoteVersion?: number;
+  localVersion?: number;
+  message: string;
+}> {
+  try {
+    const settings = await loadSettings();
+    const remoteState = await SynapseApiClient.fetchRemoteState(settings);
+
+    if (!remoteState) {
+      addDebugLog('sync', 'pull', 'Manual pull check: no remote snapshot found on server.');
+      return {
+        pulled: false,
+        message: 'No workspace snapshot found on remote server.',
+      };
+    }
+
+    const localState = await getLocalVersionState();
+    const remoteVersion = remoteState.version ?? 0;
+    const localVersion = localState.version ?? 0;
+
+    let isNewer = false;
+    if (remoteVersion > 0 && localVersion > 0) {
+      isNewer = remoteVersion > localVersion;
+    } else {
+      isNewer = (remoteState.updated_at || 0) > (localState.updatedAt || 0);
+    }
+
+    if (isNewer) {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      addDebugLog(
+        'sync',
+        'pull',
+        `Manual pull: server version (v${remoteVersion}) is newer than local (v${localVersion}). Applying update.`
+      );
+      await updateStatus({ state: 'syncing', errorMessage: null });
+      await pullSync(false, remoteState);
+      hasCompletedInitialPull = true;
+      return {
+        pulled: true,
+        remoteVersion,
+        localVersion,
+        message: `Updated to newer remote version (v${remoteVersion}).`,
+      };
+    } else {
+      addDebugLog(
+        'sync',
+        'pull',
+        `Manual pull check: server version (${remoteVersion}) is minor or equal to local (${localVersion}). Nothing to do.`
+      );
+      return {
+        pulled: false,
+        remoteVersion,
+        localVersion,
+        message: `Already up to date. Server version (${remoteVersion}) is not newer than local (${localVersion}).`,
+      };
+    }
+  } catch (err: any) {
+    console.error('[SynapseTab Pull Error]', err.message);
+    addDebugLog('error', 'pull', `Manual pull failed: ${err.message}`, err.stack || err);
+    await updateStatus({
+      state: 'error',
+      errorMessage: err.message || 'Pull failed',
+    });
+    return {
+      pulled: false,
+      message: `Pull failed: ${err.message}`,
+    };
+  }
+}
+
+/**
  * Message handler for popup UI requests.
  */
 function setupMessageListener(): void {
@@ -587,6 +668,9 @@ function setupMessageListener(): void {
         case 'PUSH_NOW':
         case 'SYNC_NOW':
           return await handlePushNowButton();
+
+        case 'PULL_NOW':
+          return await handlePullNowButton();
 
         case 'SWITCH_WORKSPACE': {
           isApplyingRemoteDiff = true;

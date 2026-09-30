@@ -31,6 +31,7 @@ let currentEditColor = '#d0bcff';
 // DOM Elements - Header & Global
 const statusBadge = document.getElementById('statusBadge') as HTMLElement;
 const statusLabel = document.getElementById('statusLabel') as HTMLElement;
+const pullNowBtn = document.getElementById('pullNowBtn') as HTMLButtonElement | null;
 const pushNowBtn = (document.getElementById('pushNowBtn') || document.getElementById('syncNowBtn')) as HTMLButtonElement;
 const syncNowBtn = pushNowBtn;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
@@ -43,9 +44,9 @@ const navBackups = document.getElementById('navBackups') as HTMLButtonElement;
 const navImportExport = document.getElementById('navImportExport') as HTMLButtonElement;
 const navSettings = document.getElementById('navSettings') as HTMLButtonElement;
 const navCustomization = document.getElementById('navCustomization') as HTMLButtonElement | null;
+const navDebug = document.getElementById('navDebug') as HTMLButtonElement | null;
 const navInformation = document.getElementById('navInformation') as HTMLButtonElement | null;
 const navDestroy = document.getElementById('navDestroy') as HTMLButtonElement | null;
-const navDebug = document.getElementById('navDebug') as HTMLButtonElement | null;
 
 // Main Sections
 const workspacesSection = document.getElementById('workspacesSection') as HTMLElement;
@@ -53,9 +54,9 @@ const backupsSection = document.getElementById('backupsSection') as HTMLElement;
 const importExportSection = document.getElementById('importExportSection') as HTMLElement;
 const settingsSection = document.getElementById('settingsSection') as HTMLElement;
 const customizationSection = document.getElementById('customizationSection') as HTMLElement | null;
+const debugSection = document.getElementById('debugSection') as HTMLElement;
 const informationSection = document.getElementById('informationSection') as HTMLElement | null;
 const destroySection = document.getElementById('destroySection') as HTMLElement | null;
-const debugSection = document.getElementById('debugSection') as HTMLElement;
 
 // Customization Section Elements
 const settingDebounceDelay = document.getElementById('settingDebounceDelay') as HTMLInputElement | null;
@@ -384,18 +385,18 @@ async function switchSection(section: NavSection): Promise<void> {
   importExportSection.classList.add('hidden');
   settingsSection.classList.add('hidden');
   customizationSection?.classList.add('hidden');
+  debugSection.classList.add('hidden');
   informationSection?.classList.add('hidden');
   destroySection?.classList.add('hidden');
-  debugSection.classList.add('hidden');
 
   navWorkspaces?.classList.remove('active');
   navBackups?.classList.remove('active');
   navImportExport?.classList.remove('active');
   navSettings?.classList.remove('active');
   navCustomization?.classList.remove('active');
+  navDebug?.classList.remove('active');
   navInformation?.classList.remove('active');
   navDestroy?.classList.remove('active');
-  navDebug?.classList.remove('active');
 
   if (section !== 'debug' && debugLiveTimer) {
     clearInterval(debugLiveTimer);
@@ -427,6 +428,12 @@ async function switchSection(section: NavSection): Promise<void> {
       navCustomization?.classList.add('active');
       await loadAndDisplayCustomization();
       break;
+    case 'debug':
+      debugSection.classList.remove('hidden');
+      navDebug?.classList.add('active');
+      await loadAndRenderDebugData();
+      startDebugLiveTimer();
+      break;
     case 'information':
       informationSection?.classList.remove('hidden');
       navInformation?.classList.add('active');
@@ -437,11 +444,6 @@ async function switchSection(section: NavSection): Promise<void> {
       navDestroy?.classList.add('active');
       initDestroySection();
       break;
-    case 'debug':
-      debugSection.classList.remove('hidden');
-      navDebug?.classList.add('active');
-      await loadAndRenderDebugData();
-      startDebugLiveTimer();
       break;
   }
 }
@@ -1248,6 +1250,27 @@ async function handleFileSelected(file: File): Promise<void> {
 }
 
 // Header & Global Actions
+pullNowBtn?.addEventListener('click', async () => {
+  pullNowBtn.classList.add('spinning');
+  try {
+    const res = await browser.runtime.sendMessage({ type: 'PULL_NOW' });
+    if (res && res.pulled) {
+      renderSyncStatus({
+        state: 'synced',
+        lastSyncTime: Date.now(),
+        errorMessage: null,
+      });
+    }
+  } catch (err: any) {
+    console.error('[SynapseTab Pull Error]', err);
+  } finally {
+    setTimeout(() => {
+      pullNowBtn.classList.remove('spinning');
+    }, 600);
+    await refreshState();
+  }
+});
+
 pushNowBtn.addEventListener('click', async () => {
   pushNowBtn.classList.add('spinning');
   renderSyncStatus({ state: 'syncing', lastSyncTime: null, errorMessage: null });
@@ -1286,9 +1309,9 @@ navBackups?.addEventListener('click', () => switchSection('backups'));
 navImportExport?.addEventListener('click', () => switchSection('importExport'));
 navSettings?.addEventListener('click', () => switchSection('settings'));
 navCustomization?.addEventListener('click', () => switchSection('customization'));
+navDebug?.addEventListener('click', () => switchSection('debug'));
 navInformation?.addEventListener('click', () => switchSection('information'));
 navDestroy?.addEventListener('click', () => switchSection('destroy'));
-navDebug?.addEventListener('click', () => switchSection('debug'));
 openDebugFromSettingsBtn?.addEventListener('click', () => switchSection('debug'));
 
 // Explorer Close
