@@ -22,7 +22,8 @@
     "test:server": "npm run test --workspace=server",
     "lint": "npm run lint --workspaces",
     "lint:extension": "npm run lint --workspace=extension",
-    "lint:web-ext": "npm run lint:web-ext --workspace=extension"
+    "lint:web-ext": "npm run lint:web-ext --workspace=extension",
+    "package:extension": "npm run package --workspace=extension"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

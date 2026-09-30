@@ -7,7 +7,7 @@ import { updateActionIcon } from './action-icon.js';
 import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace, DebugLogLevel, DebugLogEntry, DebugDiagnostics } from './types.js';
 
-const DEBOUNCE_DELAY_MS = 5000;
+const DEBOUNCE_DELAY_MS = 3000;
 const DEFAULT_SETTINGS: SynapseSettings = {
   backendUrl: 'http://localhost:8080',
   syncSecret: 'synapse_dev_secret_123',
@@ -904,7 +904,7 @@ async function dismissStartupLoadingTab(
       type: 'STARTUP_SYNC_COMPLETED',
       success,
       errorMessage,
-    }).catch(() => {});
+    }).catch(() => { });
 
     if (success) {
       const activeWsId = await WorkspaceManager.getActiveWorkspaceId();
@@ -934,7 +934,7 @@ async function dismissStartupLoadingTab(
         if (activeWsTabIds.length > 0) {
           try {
             await browser.tabs.show(activeWsTabIds);
-          } catch {}
+          } catch { }
           tabToActivate = activeWsTabIds[0];
         }
       }
@@ -952,7 +952,7 @@ async function dismissStartupLoadingTab(
       if (tabToActivate) {
         try {
           await browser.tabs.update(tabToActivate, { active: true });
-        } catch {}
+        } catch { }
       }
 
       // Allow brief animation (400ms) for visual polish, then close loading tab
@@ -967,7 +967,7 @@ async function dismissStartupLoadingTab(
     console.warn('[SynapseTab] Error dismissing startup loading tab:', err);
     try {
       await browser.tabs.remove(loadingTabId);
-    } catch {}
+    } catch { }
   }
 }
 
