@@ -7,7 +7,7 @@ import { updateActionIcon } from './action-icon.js';
 import { determineSyncAction } from './sync-action.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace } from './types.js';
 
-const DEBOUNCE_DELAY_MS = 1000;
+const DEBOUNCE_DELAY_MS = 2000;
 const DEFAULT_SETTINGS: SynapseSettings = {
   backendUrl: 'http://localhost:8080',
   syncSecret: 'synapse_dev_secret_123',
@@ -29,17 +29,27 @@ interface LocalVersionState {
   version: number;
   updatedAt: number;
   hasLocalChanges: boolean;
+  initialSyncCompleted?: boolean;
 }
 
 async function getLocalVersionState(): Promise<LocalVersionState> {
   const data = await browser.storage.local.get(['local_version_state']);
   if (data.local_version_state) {
-    return data.local_version_state;
+    const existing = data.local_version_state;
+    return {
+      version: existing.version ?? 0,
+      updatedAt: existing.updatedAt ?? 0,
+      hasLocalChanges: Boolean(existing.hasLocalChanges),
+      initialSyncCompleted: existing.initialSyncCompleted ?? (
+        (existing.version ?? 0) > 0 || (existing.updatedAt ?? 0) > 0
+      ),
+    };
   }
   const initial: LocalVersionState = {
     version: 0,
     updatedAt: 0,
     hasLocalChanges: false,
+    initialSyncCompleted: false,
   };
   await browser.storage.local.set({ local_version_state: initial });
   return initial;
@@ -76,7 +86,7 @@ async function updateStatus(statusUpdate: Partial<SyncStatus>): Promise<void> {
 }
 
 /**
- * Emits local state to the backend after 1000ms debounce.
+ * Emits local state to the backend after 2000ms debounce.
  */
 async function triggerPushSync(): Promise<void> {
   if (isApplyingRemoteDiff || !hasCompletedInitialPull) {
@@ -125,6 +135,7 @@ async function pushSync(): Promise<void> {
       version: confirmedVersion,
       updatedAt: confirmedUpdatedAt,
       hasLocalChanges: false,
+      initialSyncCompleted: true,
     });
 
     await updateStatus({
@@ -193,6 +204,7 @@ async function pullSync(isInitial: boolean = false, preloadedRemoteState?: SyncP
       version: remoteState.version ?? 1,
       updatedAt: remoteState.updated_at,
       hasLocalChanges: false,
+      initialSyncCompleted: true,
     });
 
     await updateStatus({
@@ -214,7 +226,7 @@ async function pullSync(isInitial: boolean = false, preloadedRemoteState?: SyncP
 }
 
 /**
- * Register tab event listeners with 1000ms debounce.
+ * Register tab event listeners with 2000ms debounce.
  * Only pushes changes when user interacts with tabs; never pulls automatically.
  */
 function setupTabListeners(): void {
@@ -285,8 +297,9 @@ function setupLifecycleListeners(): void {
 
 /**
  * Handles the manual Synchronize button click:
- * - If server contains a "newer version of the firefox instance", pull it.
- * - If server has a lower or equal version of the current firefox instance, push it to the server.
+ * - If server contains a newer version, pull it.
+ * - If local is newer (e.g. offline changes or higher version), push it to the server.
+ * - If local is identical to server, do nothing.
  */
 async function handleSynchronizeButton(): Promise<SyncStatus> {
   try {
@@ -299,6 +312,7 @@ async function handleSynchronizeButton(): Promise<SyncStatus> {
       version: versionState.version,
       updatedAt: versionState.updatedAt,
       hasLocalChanges: versionState.hasLocalChanges || debounceTimer !== null,
+      initialSyncCompleted: versionState.initialSyncCompleted,
     });
 
     if (action === 'pull' && remoteState) {
@@ -306,13 +320,23 @@ async function handleSynchronizeButton(): Promise<SyncStatus> {
         `[SynapseTab] Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`
       );
       await pullSync(true, remoteState);
-    } else {
+    } else if (action === 'push') {
       console.log(
-        `[SynapseTab] Server has lower or equal version (${remoteState?.version ?? remoteState?.updated_at ?? 0} <= ${versionState.version ?? versionState.updatedAt}). Pushing...`
+        `[SynapseTab] Local instance is newer or server uninitialized. Pushing...`
       );
       await pushSync();
+    } else {
+      console.log(
+        `[SynapseTab] Local instance is already identical to server (v${versionState.version}). No sync required.`
+      );
+      await updateStatus({
+        state: 'synced',
+        lastSyncTime: Date.now(),
+        errorMessage: null,
+      });
     }
 
+    hasCompletedInitialPull = true;
     return currentStatus;
   } catch (err: any) {
     console.error('[SynapseTab Sync Error]', err.message);
@@ -610,13 +634,62 @@ async function init(): Promise<void> {
   setupLifecycleListeners();
   setupMessageListener();
 
-  // Initial pull sync - when Firefox is opened, pull changes from server
+  // Startup sync decision: check if local instance is older, newer, or same
   try {
-    await pullSync(true);
+    const settings = await loadSettings();
+    const versionState = await getLocalVersionState();
+    let remoteState: SyncPayload | null = null;
+
+    try {
+      remoteState = await SynapseApiClient.fetchRemoteState(settings);
+    } catch (fetchErr: any) {
+      console.warn('[SynapseTab] Could not reach sync server on startup:', fetchErr.message);
+      // If client has already completed initial sync in the past, allow working offline
+      if (versionState.initialSyncCompleted) {
+        hasCompletedInitialPull = true;
+        console.log('[SynapseTab] Operating in offline mode with existing synced state.');
+      }
+      throw fetchErr;
+    }
+
+    const action = determineSyncAction(remoteState, {
+      version: versionState.version,
+      updatedAt: versionState.updatedAt,
+      hasLocalChanges: versionState.hasLocalChanges,
+      initialSyncCompleted: versionState.initialSyncCompleted,
+    });
+
+    console.log(`[SynapseTab] Startup sync evaluation: action = ${action}`);
+
+    if (action === 'pull' && remoteState) {
+      console.log(
+        `[SynapseTab] Server contains newer version (${remoteState.version ?? remoteState.updated_at} > ${versionState.version ?? versionState.updatedAt}). Pulling...`
+      );
+      await pullSync(true, remoteState);
+    } else if (action === 'push') {
+      console.log(
+        `[SynapseTab] Local instance is newer or server uninitialized. Pushing...`
+      );
+      await pushSync();
+    } else {
+      // action === 'none': local instance is the same stored in the home-server. Do nothing!
+      console.log(
+        `[SynapseTab] Local instance is identical to server (v${versionState.version}). No sync required.`
+      );
+      await updateStatus({
+        state: 'synced',
+        lastSyncTime: Date.now(),
+        errorMessage: null,
+      });
+    }
+
     hasCompletedInitialPull = true;
-  } catch (err) {
-    console.error('[SynapseTab] Initial pull error:', err);
-    // Note: hasCompletedInitialPull remains false if initial pull fails, protecting remote state
+  } catch (err: any) {
+    console.error('[SynapseTab] Startup sync error:', err.message);
+    await updateStatus({
+      state: 'error',
+      errorMessage: err.message || 'Startup sync check failed',
+    });
   }
 
   // Register tab listeners ONLY after initial pull has completed and settled

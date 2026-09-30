@@ -23,28 +23,87 @@ describe('determineSyncAction Pure Decision Engine', () => {
         version: 1,
         updatedAt: 1000,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
+      });
+      expect(action).toBe('push');
+    });
+
+    it('returns push when server has no snapshot even on initial setup', () => {
+      const action = determineSyncAction(null, {
+        version: 0,
+        updatedAt: 0,
+        hasLocalChanges: false,
+        initialSyncCompleted: false,
       });
       expect(action).toBe('push');
     });
   });
 
+  describe('Fresh installation / Uninitialized client safeguard', () => {
+    it('returns pull when extension is newly installed and server has an existing snapshot', () => {
+      const serverSnapshot = createMockSnapshot(5, 1000);
+      const action = determineSyncAction(serverSnapshot, {
+        version: 0,
+        updatedAt: 0,
+        hasLocalChanges: false,
+        initialSyncCompleted: false,
+      });
+      expect(action).toBe('pull');
+    });
+
+    it('returns pull on fresh install even if local browser opened tabs (hasLocalChanges is true)', () => {
+      const serverSnapshot = createMockSnapshot(5, 1000);
+      const action = determineSyncAction(serverSnapshot, {
+        version: 0,
+        updatedAt: 0,
+        hasLocalChanges: true,
+        initialSyncCompleted: false,
+      });
+      expect(action).toBe('pull');
+    });
+
+    it('returns pull if initialSyncCompleted is undefined but version and updatedAt are 0', () => {
+      const serverSnapshot = createMockSnapshot(1, 1000);
+      const action = determineSyncAction(serverSnapshot, {
+        version: 0,
+        updatedAt: 0,
+        hasLocalChanges: false,
+      });
+      expect(action).toBe('pull');
+    });
+  });
+
   describe('Numeric version comparisons', () => {
-    it('returns pull when server contains a newer version than clean local instance', () => {
+    it('returns pull when server contains a newer version than local instance (another PC worked)', () => {
       const serverSnapshot = createMockSnapshot(5, 1000);
       const action = determineSyncAction(serverSnapshot, {
         version: 3,
         updatedAt: 900,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('pull');
     });
 
-    it('returns push when server contains an equal version to local instance', () => {
+    it('returns none when server contains an equal version to local instance and no local changes (do nothing)', () => {
       const serverSnapshot = createMockSnapshot(5, 1000);
       const action = determineSyncAction(serverSnapshot, {
         version: 5,
         updatedAt: 1000,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
+      });
+      expect(action).toBe('none');
+    });
+
+    it('returns push when server contains an equal base version but local has unpushed offline changes', () => {
+      // Laptop was outside and made changes that were not pushed -> local is newer -> push!
+      const serverSnapshot = createMockSnapshot(5, 1000);
+      const action = determineSyncAction(serverSnapshot, {
+        version: 5,
+        updatedAt: 1000,
+        hasLocalChanges: true,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('push');
     });
@@ -55,42 +114,19 @@ describe('determineSyncAction Pure Decision Engine', () => {
         version: 5,
         updatedAt: 1100,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('push');
     });
 
-    it('returns push when server version equals local base version, but local has unpushed changes', () => {
-      // Local was at version 4, made local edits -> effective version is 5.
-      // Server is at version 4 (lower than effective 5) -> push!
-      const serverSnapshot = createMockSnapshot(4, 1000);
-      const action = determineSyncAction(serverSnapshot, {
-        version: 4,
-        updatedAt: 1000,
-        hasLocalChanges: true,
-      });
-      expect(action).toBe('push');
-    });
-
-    it('returns push when server version equals effective local version with unpushed changes', () => {
-      // Local was at version 4, made local edits -> effective version is 5.
-      // Server has version 5 (equal to effective 5) -> push!
-      const serverSnapshot = createMockSnapshot(5, 1000);
-      const action = determineSyncAction(serverSnapshot, {
-        version: 4,
-        updatedAt: 1000,
-        hasLocalChanges: true,
-      });
-      expect(action).toBe('push');
-    });
-
-    it('returns pull when server version is higher than effective local version even with unpushed changes', () => {
-      // Local was at version 4, made local edits -> effective version is 5.
-      // Server has version 7 (strictly greater than effective 5) -> pull!
+    it('returns pull when server version is higher than local base version even if local has unpushed changes', () => {
+      // Remote desktop pushed v7 while laptop was offline at v4 -> remote is ahead -> pull!
       const serverSnapshot = createMockSnapshot(7, 1000);
       const action = determineSyncAction(serverSnapshot, {
         version: 4,
         updatedAt: 1000,
         hasLocalChanges: true,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('pull');
     });
@@ -103,18 +139,20 @@ describe('determineSyncAction Pure Decision Engine', () => {
         version: 0,
         updatedAt: 1000,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('pull');
     });
 
-    it('returns push when server has an equal timestamp to local instance', () => {
+    it('returns none when server has an equal timestamp and no local changes', () => {
       const serverSnapshot = createMockSnapshot(undefined, 1000);
       const action = determineSyncAction(serverSnapshot, {
         version: 0,
         updatedAt: 1000,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
       });
-      expect(action).toBe('push');
+      expect(action).toBe('none');
     });
 
     it('returns push when server has an older timestamp than local instance', () => {
@@ -123,16 +161,18 @@ describe('determineSyncAction Pure Decision Engine', () => {
         version: 0,
         updatedAt: 1000,
         hasLocalChanges: false,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('push');
     });
 
-    it('returns push when local has unpushed changes and server timestamp is older or equal', () => {
+    it('returns push when timestamps are equal but local has unpushed changes', () => {
       const serverSnapshot = createMockSnapshot(undefined, 1000);
       const action = determineSyncAction(serverSnapshot, {
         version: 0,
         updatedAt: 1000,
         hasLocalChanges: true,
+        initialSyncCompleted: true,
       });
       expect(action).toBe('push');
     });

@@ -4,53 +4,86 @@ export interface LocalInstanceVersion {
   version: number;
   updatedAt: number;
   hasLocalChanges?: boolean;
+  initialSyncCompleted?: boolean;
 }
 
-export type SyncAction = 'pull' | 'push';
+export type SyncAction = 'pull' | 'push' | 'none';
 
 /**
- * Pure decision engine for the Synchronize button.
- * Compares the version of the instance saved in the server against the current Firefox instance:
- * - If the server contains a "newer version of the firefox instance", pull it ('pull').
- * - If server has a lower or equal version of the current firefox instance, push it to the server ('push').
+ * Pure decision engine for synchronization.
+ * Compares the version and timestamp of the instance saved in the server against the current Firefox instance:
+ * - If server has no snapshot yet (null / empty), push initial snapshot ('push').
+ * - If this client is freshly installed / configured and has not completed an initial sync,
+ *   it must pull the latest snapshot from the server ('pull') to avoid overwriting remote state.
+ * - If the server contains a newer version than the local instance, pull it ('pull').
+ * - If the local instance is newer than the server (e.g. unpushed changes or higher version), push it ('push').
+ * - If the local instance is the same as the server (equal versions/timestamps and no unpushed changes),
+ *   do nothing ('none').
  */
 export function determineSyncAction(
   serverSnapshot: SyncPayload | null,
   localInstance: LocalInstanceVersion
 ): SyncAction {
-  // If no snapshot exists on the server, the server has a lower version (0 / uninitialized)
+  // If no snapshot exists on the server, the server is uninitialized -> push initial snapshot
   if (!serverSnapshot) {
     return 'push';
   }
 
-  const remoteVersion = serverSnapshot.version;
-  const remoteUpdatedAt = serverSnapshot.updated_at || 0;
+  // If this extension is newly installed / configured and has never completed an initial sync:
+  // It MUST pull the existing server instance, even if local Firefox opened default tabs.
+  const isInitial =
+    localInstance.initialSyncCompleted === false ||
+    (!localInstance.initialSyncCompleted && localInstance.version === 0 && localInstance.updatedAt === 0);
 
-  // Determine effective local version and timestamp taking into account unpushed local changes
-  const effectiveLocalVersion = localInstance.hasLocalChanges
-    ? localInstance.version + 1
-    : localInstance.version;
-
-  const effectiveLocalUpdatedAt = localInstance.hasLocalChanges
-    ? Math.max(localInstance.updatedAt, Math.floor(Date.now() / 1000))
-    : localInstance.updatedAt;
-
-  // If explicit numeric version counters are present on both server and local instance
-  if (
-    typeof remoteVersion === 'number' &&
-    typeof effectiveLocalVersion === 'number' &&
-    effectiveLocalVersion > 0
-  ) {
-    if (remoteVersion > effectiveLocalVersion) {
-      return 'pull';
-    }
-    return 'push';
-  }
-
-  // Fallback to timestamp comparison if version counters are missing/uninitialized
-  if (remoteUpdatedAt > effectiveLocalUpdatedAt) {
+  if (isInitial) {
     return 'pull';
   }
 
-  return 'push';
+  const remoteVersion = serverSnapshot.version;
+  const remoteUpdatedAt = serverSnapshot.updated_at || 0;
+  const hasLocalChanges = Boolean(localInstance.hasLocalChanges);
+
+  // If explicit numeric version counters are present on both server and local instance (> 0)
+  if (
+    typeof remoteVersion === 'number' &&
+    typeof localInstance.version === 'number' &&
+    localInstance.version > 0
+  ) {
+    if (remoteVersion > localInstance.version) {
+      // Server has a newer version (another Firefox instance worked and updated the server) -> pull
+      return 'pull';
+    }
+
+    if (remoteVersion < localInstance.version) {
+      // Local version is higher than server -> push
+      return 'push';
+    }
+
+    // remoteVersion === localInstance.version
+    if (hasLocalChanges) {
+      // Same base version, but local has unpushed changes (e.g. worked offline outside) -> push
+      return 'push';
+    }
+
+    // Equal version and no unpushed local changes -> identical, do nothing
+    return 'none';
+  }
+
+  // Fallback to timestamp comparison if version counters are missing / uninitialized
+  if (remoteUpdatedAt > localInstance.updatedAt) {
+    // Server timestamp is newer -> pull
+    return 'pull';
+  }
+
+  if (remoteUpdatedAt < localInstance.updatedAt) {
+    // Local timestamp is newer -> push
+    return 'push';
+  }
+
+  // remoteUpdatedAt === localInstance.updatedAt
+  if (hasLocalChanges) {
+    return 'push';
+  }
+
+  return 'none';
 }
