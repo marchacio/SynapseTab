@@ -252,6 +252,65 @@ describe('SynapseTab Server Integration Tests', () => {
       expect(retrieved).toEqual(payloadWithVersion);
     });
 
+    it('successfully persists and retrieves workspaces with order, isDivider, and isArchived', async () => {
+      const payloadWithDividers: SyncPayload = {
+        client_id: 'laptop-order-01',
+        updated_at: 1773329500,
+        active_workspace_id: 'ws-main',
+        workspaces: [
+          {
+            id: 'ws-main',
+            name: 'Main Workspace',
+            order: 0,
+            isDivider: false,
+            isArchived: false,
+            tabs: [],
+          },
+          {
+            id: 'div-sep-1',
+            name: 'Divider Line',
+            order: 1,
+            isDivider: true,
+            tabs: [],
+          },
+          {
+            id: 'ws-old-proj',
+            name: 'Old Project',
+            order: 2,
+            isDivider: false,
+            isArchived: true,
+            tabs: [],
+          },
+        ],
+      };
+
+      const postRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+        },
+        payload: payloadWithDividers,
+      });
+
+      expect(postRes.statusCode).toBe(200);
+
+      const getRes = await app.inject({
+        method: 'GET',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+        },
+      });
+
+      expect(getRes.statusCode).toBe(200);
+      const retrieved = getRes.json();
+      expect(retrieved.workspaces).toHaveLength(3);
+      expect(retrieved.workspaces[1].isDivider).toBe(true);
+      expect(retrieved.workspaces[2].isArchived).toBe(true);
+      expect(retrieved.workspaces[0].order).toBe(0);
+    });
+
     it('isolates state per user ID header', async () => {
       const userAPayload: SyncPayload = {
         ...samplePayload,

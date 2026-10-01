@@ -657,6 +657,68 @@ describe('SynapseTab Reconcile & Diff Engine (reconcile)', () => {
     const plan = reconcile(localState, remoteState);
     expect(plan.workspacesToUpdate).toHaveLength(0);
   });
+
+  it('Scenario 14: Reconciles workspace order, isDivider, and isArchived modifications', () => {
+    const localState: SyncPayload = {
+      client_id: 'client-b',
+      updated_at: 1773328000,
+      active_workspace_id: 'ws-work',
+      workspaces: [
+        { id: 'ws-work', name: 'Work', order: 0, isDivider: false, isArchived: false, tabs: [] },
+        { id: 'ws-personal', name: 'Personal', order: 1, isDivider: false, isArchived: false, tabs: [] },
+      ],
+    };
+
+    const remoteState: SyncPayload = {
+      client_id: 'client-a',
+      updated_at: 1773329000,
+      active_workspace_id: 'ws-personal',
+      workspaces: [
+        { id: 'ws-personal', name: 'Personal', order: 0, isDivider: false, isArchived: false, tabs: [] },
+        { id: 'div-1', name: 'Divider', order: 1, isDivider: true, tabs: [] },
+        { id: 'ws-work', name: 'Work', order: 2, isDivider: false, isArchived: true, tabs: [] },
+      ],
+    };
+
+    const plan = reconcile(localState, remoteState);
+
+    expect(plan.workspacesToCreate).toContainEqual({
+      id: 'div-1',
+      name: 'Divider',
+      customType: undefined,
+      customValue: undefined,
+      color: undefined,
+      icon: undefined,
+      order: 1,
+      isDivider: true,
+      isArchived: undefined,
+    });
+
+    expect(plan.workspacesToUpdate).toContainEqual({
+      id: 'ws-personal',
+      name: 'Personal',
+      customType: undefined,
+      customValue: undefined,
+      color: undefined,
+      icon: undefined,
+      order: 0,
+      isDivider: false,
+      isArchived: false,
+    });
+
+    expect(plan.workspacesToUpdate).toContainEqual({
+      id: 'ws-work',
+      name: 'Work',
+      customType: undefined,
+      customValue: undefined,
+      color: undefined,
+      icon: undefined,
+      order: 2,
+      isDivider: false,
+      isArchived: true,
+    });
+  });
 });
+
 
 

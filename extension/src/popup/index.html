@@ -143,8 +143,22 @@
         <!-- 1. Workspaces & Tabs Section -->
         <main id="workspacesSection" class="main-content">
           <div class="section-title">
-            <h2>Workspaces</h2>
-            <button id="addWorkspaceBtn" class="btn btn-sm btn-secondary">+ New</button>
+            <div class="title-with-desc">
+              <h2>Workspaces</h2>
+              <span class="tab-mode-only text-muted-xs">Customize appearance, drag to reorder, add dividers, or
+                archive</span>
+            </div>
+            <div class="section-title-actions">
+              <button id="addDividerBtn" class="btn btn-sm btn-secondary tab-mode-only" title="Insert a visual divider">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="4" y1="12" x2="20" y2="12"></line>
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor"></circle>
+                </svg>
+                <span>+ Divider</span>
+              </button>
+              <button id="addWorkspaceBtn" class="btn btn-sm btn-secondary">+ New</button>
+            </div>
           </div>
 
           <div class="workspaces-list" id="workspacesList">
@@ -157,25 +171,41 @@
             <button id="cancelAddWsBtn" class="btn btn-sm btn-ghost">&times;</button>
           </div>
 
-          <!-- Pinned Tabs Section (Global across all workspaces) -->
-          <div class="pinned-section-wrapper hidden" id="pinnedSectionWrapper">
-            <div class="section-title pinned-section-header">
-              <h2>📌 Pinned Tabs (Global)</h2>
-              <span class="badge badge-pinned" id="pinnedCountBadge">0</span>
+          <!-- Archived Workspaces Section -->
+          <div class="archived-section-wrapper tab-mode-only" id="archivedSectionWrapper">
+            <div class="archived-section-header" id="archivedHeaderBtn">
+              <div class="archived-header-title">
+                <span class="archived-icon">📦</span>
+                <span>Archived Workspaces</span>
+                <span class="badge badge-archive" id="archivedCountBadge">0</span>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" id="toggleArchivedBtn"
+                title="Toggle archived workspaces">
+                <svg class="chevron-icon" id="archivedChevronIcon" width="16" height="16" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
             </div>
-            <div class="tabs-list pinned-tabs-list" id="pinnedTabsList">
-              <!-- Pinned tabs rendered dynamically -->
+            <div class="archived-workspaces-content hidden" id="archivedWorkspacesContent">
+              <div class="archived-workspaces-list" id="archivedWorkspacesList">
+                <!-- Rendered dynamically -->
+              </div>
             </div>
           </div>
 
-          <!-- Tabs List for Active Workspace -->
-          <div class="section-title" style="margin-top: 14px;">
-            <h2 id="activeWorkspaceTitle">Tabs in Current Workspace</h2>
-            <span class="badge" id="tabCountBadge">0</span>
-          </div>
-
-          <div class="tabs-list" id="tabsList">
-            <!-- Tabs rendered dynamically -->
+          <!-- Tabs Section (Shown in Popup Mode) -->
+          <div id="tabsSectionContainer" class="popup-mode-only">
+            <!-- Pinned Tabs Section (Global across all workspaces) -->
+            <div class="pinned-section-wrapper hidden" id="pinnedSectionWrapper">
+              <div class="section-title pinned-section-header">
+                <h2>📌 Pinned Tabs (Global)</h2>
+                <span class="badge badge-pinned" id="pinnedCountBadge">0</span>
+              </div>
+              <div class="tabs-list pinned-tabs-list" id="pinnedTabsList">
+                <!-- Pinned tabs rendered dynamically -->
+              </div>
+            </div>
           </div>
         </main>
 
@@ -671,7 +701,7 @@
     <!-- Footer -->
     <footer class="footer">
       <span id="lastSyncedText">Not yet synced</span>
-      <span class="version-tag">v1.1.0</span>
+      <span class="version-tag">1.4.0</span>
     </footer>
 
     <!-- Workspace Edit & Customization Modal -->
@@ -777,7 +807,14 @@
         </div>
 
         <div class="modal-footer">
-          <button type="button" id="promptDeleteWsBtn" class="btn btn-sm btn-ghost btn-danger">Delete Workspace</button>
+          <div class="modal-footer-start">
+            <button type="button" id="promptDeleteWsBtn" class="btn btn-sm btn-ghost btn-danger">Delete</button>
+            <button type="button" id="promptArchiveWsBtn" class="btn btn-sm btn-ghost btn-warning"
+              title="Archive workspace">
+              <span>📦</span>
+              <span id="promptArchiveWsText">Archive</span>
+            </button>
+          </div>
           <div class="modal-footer-end">
             <button type="button" id="cancelWsEditBtn" class="btn btn-sm btn-secondary">Cancel</button>
             <button type="button" id="saveWsEditBtn" class="btn btn-sm btn-primary">Save Changes</button>

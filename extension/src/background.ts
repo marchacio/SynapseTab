@@ -696,10 +696,105 @@ function setupMessageListener(): void {
             customValue: message.customValue,
             color: message.color,
             icon: message.icon,
+            order: stored.length,
+            isDivider: false,
+            isArchived: false,
           });
           await WorkspaceManager.saveStoredWorkspaces(stored);
           await pushSync();
           return { success: true, id };
+        }
+
+        case 'CREATE_DIVIDER': {
+          const stored = await WorkspaceManager.getStoredWorkspaces();
+          const id = `divider-${crypto.randomUUID().slice(0, 8)}`;
+          const newDivider: StoredWorkspace = {
+            id,
+            name: message.name || 'Divider',
+            isDivider: true,
+            order: typeof message.targetIndex === 'number' ? message.targetIndex : stored.length,
+          };
+          if (typeof message.targetIndex === 'number' && message.targetIndex >= 0 && message.targetIndex <= stored.length) {
+            stored.splice(message.targetIndex, 0, newDivider);
+          } else {
+            stored.push(newDivider);
+          }
+          stored.forEach((w, idx) => {
+            w.order = idx;
+          });
+          await WorkspaceManager.saveStoredWorkspaces(stored);
+          await pushSync();
+          return { success: true, id };
+        }
+
+        case 'REORDER_WORKSPACES': {
+          const stored = await WorkspaceManager.getStoredWorkspaces();
+          const orderedIds: string[] = message.orderedIds;
+          if (!Array.isArray(orderedIds)) {
+            throw new Error('orderedIds array is required');
+          }
+          const map = new Map(stored.map((w) => [w.id, w]));
+          const reordered: StoredWorkspace[] = [];
+          for (let i = 0; i < orderedIds.length; i++) {
+            const id = orderedIds[i];
+            const item = map.get(id);
+            if (item) {
+              item.order = i;
+              reordered.push(item);
+              map.delete(id);
+            }
+          }
+          for (const item of map.values()) {
+            item.order = reordered.length;
+            reordered.push(item);
+          }
+          await WorkspaceManager.saveStoredWorkspaces(reordered);
+          await pushSync();
+          return { success: true };
+        }
+
+        case 'ARCHIVE_WORKSPACE': {
+          const stored = await WorkspaceManager.getStoredWorkspaces();
+          const targetIndex = stored.findIndex((w) => w.id === message.workspaceId);
+          if (targetIndex === -1) {
+            throw new Error(`Workspace with id ${message.workspaceId} not found`);
+          }
+          const shouldArchive = Boolean(message.archive);
+          if (shouldArchive) {
+            const activeWorkspaces = stored.filter((w) => !w.isDivider && !w.isArchived);
+            if (activeWorkspaces.length <= 1 && activeWorkspaces.some((w) => w.id === message.workspaceId)) {
+              throw new Error('Cannot archive the only remaining active workspace');
+            }
+            const activeWs = await WorkspaceManager.getActiveWorkspaceId();
+            if (activeWs === message.workspaceId) {
+              const fallbackWs = stored.find((w) => w.id !== message.workspaceId && !w.isDivider && !w.isArchived);
+              if (fallbackWs) {
+                await WorkspaceManager.switchToWorkspace(fallbackWs.id);
+              }
+            }
+            const allTabs = await browser.tabs.query({ currentWindow: true });
+            const tabsToHide: number[] = [];
+            for (const t of allTabs) {
+              if (t.id !== undefined && !t.pinned) {
+                const ws = await WorkspaceManager.getTabWorkspaceId(t.id, '');
+                if (ws === message.workspaceId) {
+                  tabsToHide.push(t.id);
+                }
+              }
+            }
+            if (tabsToHide.length > 0) {
+              try {
+                await browser.tabs.hide(tabsToHide);
+              } catch {}
+            }
+            stored[targetIndex].isArchived = true;
+          } else {
+            stored[targetIndex].isArchived = false;
+          }
+          await WorkspaceManager.saveStoredWorkspaces(stored);
+          await updateActionIcon();
+          await pushSync();
+          return { success: true };
         }
 
         case 'UPDATE_WORKSPACE': {
@@ -727,6 +822,9 @@ function setupMessageListener(): void {
             customValue: nextCustomValue,
             color: message.color !== undefined ? message.color : stored[targetIndex].color,
             icon: nextIcon,
+            order: message.order !== undefined ? message.order : stored[targetIndex].order,
+            isDivider: message.isDivider !== undefined ? message.isDivider : stored[targetIndex].isDivider,
+            isArchived: message.isArchived !== undefined ? message.isArchived : stored[targetIndex].isArchived,
           };
           await WorkspaceManager.saveStoredWorkspaces(stored);
           await pushSync();
@@ -735,12 +833,26 @@ function setupMessageListener(): void {
 
         case 'DELETE_WORKSPACE': {
           const stored = await WorkspaceManager.getStoredWorkspaces();
-          const activeWs = await WorkspaceManager.getActiveWorkspaceId();
-          if (stored.length <= 1) {
+          const targetWs = stored.find((w) => w.id === message.workspaceId);
+
+          // If deleting a divider, simply remove without closing tabs
+          if (targetWs?.isDivider) {
+            const filtered = stored.filter((w) => w.id !== message.workspaceId);
+            filtered.forEach((w, idx) => {
+              w.order = idx;
+            });
+            await WorkspaceManager.saveStoredWorkspaces(filtered);
+            await pushSync();
+            return { success: true };
+          }
+
+          const activeWorkspaces = stored.filter((w) => !w.isDivider && !w.isArchived);
+          if (activeWorkspaces.length <= 1 && activeWorkspaces.some((w) => w.id === message.workspaceId)) {
             throw new Error('Cannot delete the only remaining workspace');
           }
           const filtered = stored.filter((w) => w.id !== message.workspaceId);
-          const fallbackWs = filtered[0].id;
+          const fallbackWs = filtered.find((w) => !w.isDivider && !w.isArchived)?.id || DEFAULT_WORKSPACE_ID;
+          const activeWs = await WorkspaceManager.getActiveWorkspaceId();
 
           // If the workspace being deleted is currently active, switch to fallback workspace first
           if (activeWs === message.workspaceId) {
@@ -781,6 +893,9 @@ function setupMessageListener(): void {
             }
           }
 
+          filtered.forEach((w, idx) => {
+            w.order = idx;
+          });
           await WorkspaceManager.saveStoredWorkspaces(filtered);
           await pushSync();
           return { success: true };

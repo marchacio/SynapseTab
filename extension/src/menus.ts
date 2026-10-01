@@ -176,6 +176,7 @@ export async function setupContextMenus(): Promise<void> {
     });
 
     for (const ws of storedWorkspaces) {
+      if (ws.isDivider || ws.isArchived) continue;
       browser.menus.create({
         id: `${WORKSPACE_MENU_PREFIX}${ws.id}`,
         parentId: ROOT_MENU_ID,

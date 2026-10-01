@@ -21,6 +21,9 @@ export interface Workspace {
   customValue?: string;
   color?: string;
   icon?: string;
+  order?: number;
+  isDivider?: boolean;
+  isArchived?: boolean;
 }
 
 export interface SyncPayload {
