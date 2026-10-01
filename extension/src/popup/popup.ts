@@ -1387,7 +1387,35 @@ async function loadAndRenderBackups(): Promise<void> {
         }
       });
 
+      // Download button
+      const downloadBtn = document.createElement('button');
+      downloadBtn.className = 'btn btn-sm btn-ghost';
+      downloadBtn.textContent = 'JSON';
+      downloadBtn.title = 'Download SynapseTab JSON backup file';
+      downloadBtn.addEventListener('click', async () => {
+        try {
+          const backupData = await browser.runtime.sendMessage({
+            type: 'DOWNLOAD_BACKUP',
+            backupId: bk.id,
+          });
+          const jsonStr = JSON.stringify(backupData, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const dateStr = new Date(bk.timestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          a.href = url;
+          a.download = `synapsetab-backup-${dateStr}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (err: any) {
+          alert(`Download failed: ${err.message}`);
+        }
+      });
+
       actions.appendChild(exploreBtn);
+      actions.appendChild(downloadBtn);
       actions.appendChild(restoreBtn);
       actions.appendChild(deleteBtn);
 
@@ -1430,7 +1458,26 @@ async function exploreBackup(backupId: string): Promise<void> {
     explorerSnapshotDate.textContent = new Date(record.timestamp).toLocaleString();
     explorerContent.replaceChildren();
 
-    if (!record.snapshot || !record.snapshot.workspaces || record.snapshot.workspaces.length === 0) {
+    const workspacesToExplore = (record.backup && record.backup.workspaces) || record.snapshot?.workspaces || [];
+
+    if (record.backup?.pinnedTabs && record.backup.pinnedTabs.length > 0) {
+      const pinnedGroup = document.createElement('div');
+      pinnedGroup.className = 'explorer-ws-group';
+      const pTitle = document.createElement('div');
+      pTitle.className = 'explorer-ws-title';
+      pTitle.textContent = `📌 Pinned Tabs (${record.backup.pinnedTabs.length})`;
+      pinnedGroup.appendChild(pTitle);
+      for (const tab of record.backup.pinnedTabs) {
+        const tabItem = document.createElement('div');
+        tabItem.className = 'explorer-tab-item';
+        tabItem.textContent = tab.title || tab.url || 'Pinned Tab';
+        tabItem.title = tab.url;
+        pinnedGroup.appendChild(tabItem);
+      }
+      explorerContent.appendChild(pinnedGroup);
+    }
+
+    if (workspacesToExplore.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.style.color = 'var(--text-muted)';
       emptyEl.style.fontSize = '11px';
@@ -1439,14 +1486,19 @@ async function exploreBackup(backupId: string): Promise<void> {
       return;
     }
 
-    for (const ws of record.snapshot.workspaces) {
+    for (const ws of workspacesToExplore) {
       const wsGroup = document.createElement('div');
       wsGroup.className = 'explorer-ws-group';
 
       const title = document.createElement('div');
       title.className = 'explorer-ws-title';
-      const count = ws.tabs ? ws.tabs.length : 0;
-      title.textContent = `📁 ${ws.name} (${count} tab${count === 1 ? '' : 's'})`;
+      if (ws.isDivider) {
+        title.textContent = `⸻ Divider: ${ws.name || 'Divider'}`;
+      } else {
+        const count = ws.tabs ? ws.tabs.length : 0;
+        const archivedTag = ws.isArchived ? ' [Archived]' : '';
+        title.textContent = `📁 ${ws.name}${archivedTag} (${count} tab${count === 1 ? '' : 's'})`;
+      }
       wsGroup.appendChild(title);
 
       if (ws.tabs && ws.tabs.length > 0) {
@@ -1457,7 +1509,7 @@ async function exploreBackup(backupId: string): Promise<void> {
           tabItem.title = tab.url;
           wsGroup.appendChild(tabItem);
         }
-      } else {
+      } else if (!ws.isDivider) {
         const noTab = document.createElement('div');
         noTab.className = 'explorer-tab-item';
         noTab.style.fontStyle = 'italic';

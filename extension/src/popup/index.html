@@ -81,7 +81,7 @@
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          <span>Backup & Restore</span>
+          <span>Import & Export</span>
         </button>
         <button id="navSettings" class="nav-item" data-section="settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -268,12 +268,13 @@
           </div>
         </main>
 
-        <!-- 3. Backup & Restore Section (SynapseTab Native & STG Compatible) -->
+        <!-- 3. Import & Export Section (SynapseTab Native & STG Compatible) -->
         <main id="importExportSection" class="main-content hidden">
           <div class="section-title">
             <div class="title-with-desc">
-              <h2>Backup & Restore</h2>
-              <span class="text-muted-xs">Export backups to JSON files or import existing workspaces into SynapseTab</span>
+              <h2>Import & Export</h2>
+              <span class="text-muted-xs">Export backups to JSON files or import existing workspaces into
+                SynapseTab</span>
             </div>
           </div>
 
@@ -287,12 +288,14 @@
                   <span class="format-title">SynapseTab Backup</span>
                   <span class="badge badge-accent">Full Fidelity</span>
                 </div>
-                <span class="text-muted-xs">Preserves all workspaces, dividers, archived state, custom badges, and tabs</span>
+                <span class="text-muted-xs">Preserves all workspaces, dividers, archived state, custom badges, and
+                  tabs</span>
               </div>
               <div class="backup-btn-row">
                 <button id="exportSynapseBtn" class="btn-backup-action btn-backup-primary" type="button">
                   <div class="btn-backup-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="7 10 12 15 17 10"></polyline>
                       <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -300,13 +303,13 @@
                   </div>
                   <div class="btn-backup-content">
                     <div class="btn-backup-label">Export SynapseTab Backup</div>
-                    <div class="btn-backup-sub">Download .json with workspaces, dividers & archived</div>
                   </div>
                 </button>
 
                 <button id="importSynapseBtn" class="btn-backup-action btn-backup-primary" type="button">
                   <div class="btn-backup-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="17 8 12 3 7 8"></polyline>
                       <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -314,7 +317,6 @@
                   </div>
                   <div class="btn-backup-content">
                     <div class="btn-backup-label">Import SynapseTab Backup</div>
-                    <div class="btn-backup-sub">Full restore from a SynapseTab JSON file</div>
                   </div>
                 </button>
               </div>
@@ -328,12 +330,14 @@
                   <span class="format-title">Simple Tab Groups (STG)</span>
                   <span class="badge badge-warning">Compatibility Mode</span>
                 </div>
-                <span class="text-muted-xs">Compatible with Drive4ik STG v5.3.2 (loses dividers, archived state & custom badges)</span>
+                <span class="text-muted-xs">Compatible with Drive4ik STG v5.3.2 (loses dividers, archived state & custom
+                  badges)</span>
               </div>
               <div class="backup-btn-row">
                 <button id="exportStgBtn" class="btn-backup-action btn-backup-secondary" type="button">
                   <div class="btn-backup-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="7 10 12 15 17 10"></polyline>
                       <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -341,13 +345,13 @@
                   </div>
                   <div class="btn-backup-content">
                     <div class="btn-backup-label">Export STG JSON</div>
-                    <div class="btn-backup-sub">Standard STG 5.3.2 format (loses dividers & icons)</div>
                   </div>
                 </button>
 
                 <button id="importStgBtn" class="btn-backup-action btn-backup-secondary" type="button">
                   <div class="btn-backup-icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="17 8 12 3 7 8"></polyline>
                       <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -355,7 +359,6 @@
                   </div>
                   <div class="btn-backup-content">
                     <div class="btn-backup-label">Import STG JSON</div>
-                    <div class="btn-backup-sub">Import from Drive4ik STG export file</div>
                   </div>
                 </button>
               </div>
@@ -372,7 +375,8 @@
               <line x1="12" y1="18" x2="12" y2="12"></line>
               <line x1="9" y1="15" x2="15" y2="15"></line>
             </svg>
-            <span class="drop-text" id="dropZoneText">Click an Import button above or drop any .json backup file here</span>
+            <span class="drop-text" id="dropZoneText">Click an Import button above or drop any .json backup file
+              here</span>
           </label>
 
           <!-- Import Preview Box (shown after valid file parsed) -->
@@ -458,23 +462,6 @@
 
             <div id="settingsFeedbackMsg" class="import-feedback hidden" style="margin-top: 8px;"></div>
           </div>
-
-          <!-- Diagnostics & Troubleshooting Quick Link Card -->
-          <div class="feature-card" style="margin-top: 14px;">
-            <div class="card-header">
-              <div class="card-header-title">
-                <span class="card-icon">🛠️</span>
-                <span class="card-title">Diagnostics & System Logs</span>
-              </div>
-            </div>
-            <p class="card-desc">
-              Inspect real-time background service logs, sync decision history, error traces, and live connection
-              diagnostics.
-            </p>
-            <button id="openDebugFromSettingsBtn" class="btn btn-secondary btn-block" type="button">
-              View Debug Console & Logs
-            </button>
-          </div>
         </main>
 
         <!-- 5. Customization Section -->
@@ -518,20 +505,6 @@
             </div>
 
             <div id="customizationFeedbackMsg" class="import-feedback hidden" style="margin-top: 8px;"></div>
-          </div>
-
-          <div class="feature-card" style="margin-top: 4px;">
-            <div class="card-header">
-              <div class="card-header-title">
-                <span class="card-icon">🎨</span>
-                <span class="card-title">Additional Preferences</span>
-              </div>
-              <span class="badge">Future Options</span>
-            </div>
-            <p class="card-desc">
-              More customization settings such as theme accents, suspended tab behavior, and sync notifications will be
-              configurable here in upcoming updates.
-            </p>
           </div>
         </main>
 

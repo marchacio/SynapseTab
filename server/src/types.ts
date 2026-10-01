@@ -61,8 +61,11 @@ export interface BackupMetadata {
   size_bytes?: number;
 }
 
+import type { SynapseTabBackupData } from './backup-format.js';
+
 export interface BackupRecord extends BackupMetadata {
   snapshot: SyncPayload;
+  backup?: SynapseTabBackupData;
 }
 
 export interface BackupConfig {

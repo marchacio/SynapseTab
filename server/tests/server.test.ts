@@ -511,6 +511,41 @@ describe('SynapseTab Server Integration Tests', () => {
       const detail = getRes.json();
       expect(detail.id).toBe(backupId);
       expect(detail.snapshot.workspaces.length).toBe(2);
+      expect(detail.backup).toBeDefined();
+      expect(detail.backup.format).toBe('synapsetab-backup');
+      expect(detail.backup.version).toBe('1.4.0');
+      expect(detail.backup.workspaces.length).toBe(2);
+    });
+
+    it('GET /api/v1/backups/:id/download returns attachment JSON with SynapseTab format', async () => {
+      // 1. Create backup
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/backups',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': 'test-user',
+        },
+      });
+      const backupId = createRes.json().id;
+
+      // 2. Download JSON
+      const downloadRes = await app.inject({
+        method: 'GET',
+        url: `/api/v1/backups/${backupId}/download`,
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': 'test-user',
+        },
+      });
+
+      expect(downloadRes.statusCode).toBe(200);
+      expect(downloadRes.headers['content-type']).toContain('application/json');
+      expect(downloadRes.headers['content-disposition']).toBe(`attachment; filename="synapsetab-backup-${backupId}.json"`);
+      const body = downloadRes.json();
+      expect(body.format).toBe('synapsetab-backup');
+      expect(body.version).toBe('1.4.0');
+      expect(body.workspaces.length).toBe(2);
     });
 
     it('GET /api/v1/backups/:id returns 404 for non-existent backup', async () => {
@@ -750,6 +785,21 @@ describe('SynapseTab Server Integration Tests', () => {
       expect(list.length).toBe(1);
       expect(list[0].reason).toBe('scheduled');
       expect(list[0].workspaces_count).toBe(2);
+
+      // Verify scheduled backup record contains native SynapseTab format
+      const detailRes = await app.inject({
+        method: 'GET',
+        url: `/api/v1/backups/${list[0].id}`,
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': 'scheduler-user',
+        },
+      });
+      const detail = detailRes.json();
+      expect(detail.backup).toBeDefined();
+      expect(detail.backup.format).toBe('synapsetab-backup');
+      expect(detail.backup.version).toBe('1.4.0');
+      expect(detail.backup.workspaces.length).toBe(2);
 
       // Running immediately again without time passing should NOT create another backup
       const secondCheckCount = await scheduler.runPeriodicCheck();

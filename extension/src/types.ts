@@ -104,6 +104,7 @@ export interface BackupMetadata {
 
 export interface BackupRecord extends BackupMetadata {
   snapshot: SyncPayload;
+  backup?: any;
 }
 
 export interface BackupConfig {

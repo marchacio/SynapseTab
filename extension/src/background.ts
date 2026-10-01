@@ -1034,29 +1034,38 @@ function setupMessageListener(): void {
           }
 
           const restoredSnapshot: SyncPayload = res.restored_snapshot;
-          const pinnedTabs: TabItem[] = [];
-          const workspaces: Workspace[] = [];
+          let pinnedTabs: TabItem[] = [];
+          let workspaces: Workspace[] = [];
 
-          for (const ws of (restoredSnapshot.workspaces || [])) {
-            const wsRegularTabs: TabItem[] = [];
-            for (const tab of (ws.tabs || [])) {
-              if (tab.pinned) {
-                if (!pinnedTabs.some((p) => p.url === tab.url || (p.uuid && p.uuid === tab.uuid))) {
-                  pinnedTabs.push(tab);
+          if (res.backup) {
+            const imported = importFromSynapseFormat(res.backup);
+            workspaces = imported.workspaces;
+            pinnedTabs = imported.pinnedTabs;
+          } else {
+            for (const ws of (restoredSnapshot.workspaces || [])) {
+              const wsRegularTabs: TabItem[] = [];
+              for (const tab of (ws.tabs || [])) {
+                if (tab.pinned) {
+                  if (!pinnedTabs.some((p) => p.url === tab.url || (p.uuid && p.uuid === tab.uuid))) {
+                    pinnedTabs.push(tab);
+                  }
+                } else {
+                  wsRegularTabs.push(tab);
                 }
-              } else {
-                wsRegularTabs.push(tab);
               }
+              workspaces.push({
+                id: ws.id,
+                name: ws.name,
+                customType: ws.customType,
+                customValue: ws.customValue,
+                color: ws.color,
+                icon: ws.icon,
+                order: ws.order,
+                isDivider: ws.isDivider,
+                isArchived: ws.isArchived,
+                tabs: wsRegularTabs,
+              });
             }
-            workspaces.push({
-              id: ws.id,
-              name: ws.name,
-              customType: ws.customType,
-              customValue: ws.customValue,
-              color: ws.color,
-              icon: ws.icon,
-              tabs: wsRegularTabs,
-            });
           }
 
           if (debounceTimer) {
@@ -1102,6 +1111,11 @@ function setupMessageListener(): void {
         case 'DELETE_BACKUP': {
           const settings = await loadSettings();
           return await SynapseApiClient.deleteBackup(settings, message.backupId);
+        }
+
+        case 'DOWNLOAD_BACKUP': {
+          const settings = await loadSettings();
+          return await SynapseApiClient.downloadBackup(settings, message.backupId);
         }
 
         case 'UPDATE_BACKUP_CONFIG': {
