@@ -18,3 +18,9 @@
 - **Test-Driven Core:** 100% unit test coverage for the reconciliation and diff algorithms (`diff.ts`). Backend routes must include integration tests executed against a Redis instance.
 - **Continuous Integration:** Every PR/push must pass linter checks, test suites, `web-ext lint` compliance, and multi-arch Docker builds (`linux/amd64`, `linux/arm64`).
 - **Local Developer Experience (DX):** Must support hot-reloading for both backend and extension, with scripted commands to launch two independent Firefox profile instances for concurrent sync debugging.
+
+## 4. Backup, Disaster Recovery & Data Integrity Standards
+- **Always-Working Backup System:** The backup and restore functionality is a mission-critical core feature of SynapseTab and must remain 100% operational at all times without regression.
+  - **Native SynapseTab JSON Format:** Must support full-fidelity export and import capturing all workspaces, tabs, ordering (`order`), dividers (`isDivider`), archived state (`isArchived`), custom badges/icons, and global pinned tabs.
+  - **STG Interoperability:** Backward compatibility with Drive4ik Simple Tab Groups (STG v5.3.2) JSON exports must be maintained for seamless migration.
+  - **Zero Data Loss Guarantee:** Any schema or storage changes must be verified against dedicated unit tests (`backup-format.test.ts`) to ensure flawless import/export round-trip fidelity.

@@ -107,15 +107,19 @@ export function sanitizeTabUrl(rawUrl?: string): string {
   if (!rawUrl || typeof rawUrl !== 'string') return 'about:blank';
   const trimmed = rawUrl.trim();
   if (
+    trimmed.toLowerCase().startsWith('javascript:') ||
+    trimmed.toLowerCase().startsWith('data:text/html') ||
+    trimmed.toLowerCase().startsWith('vbscript:')
+  ) {
+    return 'about:blank';
+  }
+  if (
     trimmed.startsWith('http://') ||
     trimmed.startsWith('https://') ||
     trimmed === 'about:blank' ||
-    trimmed === 'about:newtab'
+    trimmed === 'about:newtab' ||
+    trimmed.startsWith('moz-extension://')
   ) {
-    return trimmed;
-  }
-  // Convert moz-extension URLs or others to safe url if needed
-  if (trimmed.startsWith('moz-extension://')) {
     return trimmed;
   }
   return trimmed || 'about:blank';

@@ -12,14 +12,20 @@ import {
   DebugDataResponse,
 } from '../types.js';
 import { importFromStgFormat, StgImportResult } from '../stg-adapter.js';
+import {
+  importFromSynapseFormat,
+  detectBackupFormat,
+  SynapseTabImportResult,
+} from '../backup-format.js';
 import { getContrastingTextColor } from '../theme/tokens.js';
 import { SynapseApiClient, TestConnectionResult } from '../api.js';
-
 
 let currentWorkspaces: Workspace[] = [];
 let activeWorkspaceId = 'default';
 let currentSettings: SynapseSettings;
 let loadedStgResult: StgImportResult | null = null;
+let loadedSynapseResult: SynapseTabImportResult | null = null;
+let currentImportType: 'synapsetab' | 'stg' | null = null;
 let rawImportedJson: any = null;
 
 // Modal Editing State
@@ -138,15 +144,19 @@ const explorerSnapshotName = document.getElementById('explorerSnapshotName') as 
 const explorerSnapshotDate = document.getElementById('explorerSnapshotDate') as HTMLElement;
 const explorerContent = document.getElementById('explorerContent') as HTMLElement;
 
-// Import / Export elements
+// Backup & Restore elements
+const exportSynapseBtn = document.getElementById('exportSynapseBtn') as HTMLButtonElement | null;
+const importSynapseBtn = document.getElementById('importSynapseBtn') as HTMLButtonElement | null;
 const exportStgBtn = document.getElementById('exportStgBtn') as HTMLButtonElement;
-const exportBadge = document.getElementById('exportBadge') as HTMLElement;
+const importStgBtn = document.getElementById('importStgBtn') as HTMLButtonElement | null;
+const exportBadge = document.getElementById('exportBadge') as HTMLElement | null;
 const stgFileInput = document.getElementById('stgFileInput') as HTMLInputElement;
 const stgDropZone = document.getElementById('stgDropZone') as HTMLElement;
 const dropZoneText = document.getElementById('dropZoneText') as HTMLElement;
 const importPreviewCard = document.getElementById('importPreviewCard') as HTMLElement;
 const previewFileName = document.getElementById('previewFileName') as HTMLElement;
 const previewVersionBadge = document.getElementById('previewVersionBadge') as HTMLElement;
+const previewWarningNotice = document.getElementById('previewWarningNotice') as HTMLElement | null;
 const previewWsCount = document.getElementById('previewWsCount') as HTMLElement;
 const previewPinnedCount = document.getElementById('previewPinnedCount') as HTMLElement;
 const previewTabsCount = document.getElementById('previewTabsCount') as HTMLElement;
@@ -295,6 +305,41 @@ async function executeStgImportWithLoadingScreen(
       'Import Completed Successfully!',
       `Restored ${res.workspacesCount} workspaces and ${res.tabsCount + res.pinnedCount} tabs.`,
       'Clean state has been synchronized and persisted.',
+      async () => {
+        await switchSection('workspaces');
+        await refreshState();
+      }
+    );
+  } catch (err: any) {
+    failRestoreLoadingScreen('Import Failed', err.message || 'Failed to import backup.');
+  }
+}
+
+async function executeSynapseImportWithLoadingScreen(
+  backupData: any,
+  mode: 'replace' | 'merge',
+  info: { workspaceCount: number; tabCount: number; pinnedCount: number }
+): Promise<void> {
+  showRestoreLoadingScreen(
+    'Importing SynapseTab Backup',
+    `Restoring ${info.workspaceCount} workspaces and ${info.tabCount + info.pinnedCount} tabs (${mode} mode)...`,
+    'Materializing tabs in suspended state with full fidelity. SynapseTab will remain in foreground.'
+  );
+
+  try {
+    const res = await browser.runtime.sendMessage({
+      type: 'IMPORT_SYNAPSE_BACKUP',
+      backupData,
+      mode,
+    });
+    if (res?.error) {
+      throw new Error(res.error);
+    }
+    await refreshState();
+    completeRestoreLoadingScreen(
+      'Import Completed Successfully!',
+      `Restored ${res.workspacesCount} workspaces (${res.dividerCount || 0} dividers, ${res.archivedCount || 0} archived) and ${res.tabsCount + res.pinnedCount} tabs.`,
+      'State synchronized and persisted with full fidelity.',
       async () => {
         await switchSection('workspaces');
         await refreshState();
@@ -1440,32 +1485,90 @@ function processJsonContent(content: string, sourceName: string = 'backup.json')
 
   try {
     rawImportedJson = JSON.parse(content);
-    loadedStgResult = importFromStgFormat(rawImportedJson);
+    const format = detectBackupFormat(rawImportedJson);
 
-    previewFileName.textContent = sourceName;
-    previewVersionBadge.textContent = `STG ${loadedStgResult.version}`;
-    previewWsCount.textContent = `${loadedStgResult.groupCount} workspace${loadedStgResult.groupCount === 1 ? '' : 's'}`;
-    previewPinnedCount.textContent = `${loadedStgResult.pinnedCount} pinned`;
-    previewTabsCount.textContent = `${loadedStgResult.tabCount} total tabs`;
+    if (format === 'synapsetab') {
+      currentImportType = 'synapsetab';
+      loadedSynapseResult = importFromSynapseFormat(rawImportedJson);
+      loadedStgResult = null;
 
-    // Render group chips
-    previewGroupsChips.innerHTML = '';
-    for (const ws of loadedStgResult.workspaces) {
-      const chip = document.createElement('span');
-      chip.className = 'group-chip';
-      chip.textContent = ws.name;
+      previewFileName.textContent = sourceName;
+      previewVersionBadge.textContent = `SynapseTab v${loadedSynapseResult.version} (Native)`;
+      previewVersionBadge.className = 'badge badge-accent';
+      previewWarningNotice?.classList.add('hidden');
 
-      const tabsCountSpan = document.createElement('span');
-      tabsCountSpan.className = 'group-chip-tabs';
-      tabsCountSpan.textContent = `(${ws.tabs.length})`;
-      chip.appendChild(tabsCountSpan);
+      const parts: string[] = [`${loadedSynapseResult.activeCount} active`];
+      if (loadedSynapseResult.dividerCount > 0) {
+        parts.push(`${loadedSynapseResult.dividerCount} divider${loadedSynapseResult.dividerCount === 1 ? '' : 's'}`);
+      }
+      if (loadedSynapseResult.archivedCount > 0) {
+        parts.push(`${loadedSynapseResult.archivedCount} archived`);
+      }
 
-      previewGroupsChips.appendChild(chip);
+      previewWsCount.textContent = `${loadedSynapseResult.workspaceCount} workspaces (${parts.join(', ')})`;
+      previewPinnedCount.textContent = `${loadedSynapseResult.pinnedCount} pinned`;
+      previewTabsCount.textContent = `${loadedSynapseResult.tabCount} total tabs`;
+
+      // Render group chips with badges
+      previewGroupsChips.innerHTML = '';
+      for (const ws of loadedSynapseResult.workspaces) {
+        const chip = document.createElement('span');
+        chip.className = 'group-chip';
+        if (ws.isDivider) {
+          chip.textContent = `— ${ws.name || 'Divider'} —`;
+          chip.style.opacity = '0.6';
+          chip.style.borderStyle = 'dashed';
+        } else if (ws.isArchived) {
+          chip.textContent = `📦 ${ws.name} (${ws.tabs.length})`;
+          chip.style.opacity = '0.75';
+        } else {
+          chip.textContent = ws.name;
+          const tabsCountSpan = document.createElement('span');
+          tabsCountSpan.className = 'group-chip-tabs';
+          tabsCountSpan.textContent = `(${ws.tabs.length})`;
+          chip.appendChild(tabsCountSpan);
+        }
+        previewGroupsChips.appendChild(chip);
+      }
+
+      importPreviewCard.classList.remove('hidden');
+    } else if (format === 'stg') {
+      currentImportType = 'stg';
+      loadedStgResult = importFromStgFormat(rawImportedJson);
+      loadedSynapseResult = null;
+
+      previewFileName.textContent = sourceName;
+      previewVersionBadge.textContent = `STG ${loadedStgResult.version} (Compatibility)`;
+      previewVersionBadge.className = 'badge badge-warning';
+      previewWarningNotice?.classList.remove('hidden');
+
+      previewWsCount.textContent = `${loadedStgResult.groupCount} workspaces`;
+      previewPinnedCount.textContent = `${loadedStgResult.pinnedCount} pinned`;
+      previewTabsCount.textContent = `${loadedStgResult.tabCount} total tabs`;
+
+      // Render group chips
+      previewGroupsChips.innerHTML = '';
+      for (const ws of loadedStgResult.workspaces) {
+        const chip = document.createElement('span');
+        chip.className = 'group-chip';
+        chip.textContent = ws.name;
+
+        const tabsCountSpan = document.createElement('span');
+        tabsCountSpan.className = 'group-chip-tabs';
+        tabsCountSpan.textContent = `(${ws.tabs.length})`;
+        chip.appendChild(tabsCountSpan);
+
+        previewGroupsChips.appendChild(chip);
+      }
+
+      importPreviewCard.classList.remove('hidden');
+    } else {
+      throw new Error('Unrecognized JSON format. File must be a SynapseTab backup or Simple Tab Groups export.');
     }
-
-    importPreviewCard.classList.remove('hidden');
   } catch (err: any) {
     loadedStgResult = null;
+    loadedSynapseResult = null;
+    currentImportType = null;
     rawImportedJson = null;
     importPreviewCard.classList.add('hidden');
     importFeedbackMsg.className = 'import-feedback error';
@@ -1558,10 +1661,44 @@ closeExplorerBtn.addEventListener('click', () => {
   backupExplorer.classList.add('hidden');
 });
 
+// Export SynapseTab Native JSON Action
+exportSynapseBtn?.addEventListener('click', async () => {
+  if (!exportSynapseBtn) return;
+  exportSynapseBtn.disabled = true;
+
+  try {
+    const backupData = await browser.runtime.sendMessage({ type: 'EXPORT_SYNAPSE_BACKUP' });
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+    const filename = `synapsetab-backup-${dateStr}_${timeStr}.json`;
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    alert(`Export failed: ${err.message}`);
+  } finally {
+    exportSynapseBtn.disabled = false;
+  }
+});
+
+// Import SynapseTab Button Action -> Open file picker
+importSynapseBtn?.addEventListener('click', () => {
+  stgFileInput?.click();
+});
+
 // Export STG JSON Action
-exportStgBtn.addEventListener('click', async () => {
+exportStgBtn?.addEventListener('click', async () => {
   exportStgBtn.disabled = true;
-  exportStgBtn.textContent = 'Generating export...';
 
   try {
     const stgData = await browser.runtime.sendMessage({ type: 'EXPORT_STG' });
@@ -1581,24 +1718,16 @@ exportStgBtn.addEventListener('click', async () => {
     downloadLink.click();
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
-
-    exportBadge.textContent = 'Downloaded!';
-    setTimeout(() => {
-      exportBadge.textContent = 'Ready';
-    }, 3000);
   } catch (err: any) {
     alert(`Export failed: ${err.message}`);
   } finally {
     exportStgBtn.disabled = false;
-    exportStgBtn.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
-      Export JSON File
-    `;
   }
+});
+
+// Import STG Button Action -> Open file picker
+importStgBtn?.addEventListener('click', () => {
+  stgFileInput?.click();
 });
 
 // Import STG File Input & Drag and Drop
@@ -1891,19 +2020,27 @@ clearDebugLogsBtn.addEventListener('click', async () => {
 
 // Execute Import
 executeImportBtn.addEventListener('click', async () => {
-  if (!rawImportedJson || !loadedStgResult) return;
+  if (!rawImportedJson || (!loadedStgResult && !loadedSynapseResult)) return;
 
   const modeRadio = document.querySelector('input[name="importMode"]:checked') as HTMLInputElement;
   const mode = (modeRadio ? modeRadio.value : 'replace') as 'replace' | 'merge';
 
+  const wsCount = loadedSynapseResult ? loadedSynapseResult.workspaceCount : loadedStgResult!.groupCount;
+  const pinnedCount = loadedSynapseResult ? loadedSynapseResult.pinnedCount : loadedStgResult!.pinnedCount;
+  const formatName = currentImportType === 'synapsetab' ? 'SynapseTab' : 'STG';
+
   const confirmMsg =
     mode === 'replace'
-      ? `Replace all current workspaces with ${loadedStgResult.groupCount} workspaces and ${loadedStgResult.pinnedCount} pinned tabs?`
-      : `Merge ${loadedStgResult.groupCount} workspaces and ${loadedStgResult.pinnedCount} pinned tabs into your current setup?`;
+      ? `Replace all current workspaces with ${wsCount} ${formatName} workspaces and ${pinnedCount} pinned tabs?`
+      : `Merge ${wsCount} ${formatName} workspaces and ${pinnedCount} pinned tabs into your current setup?`;
 
   if (!confirm(confirmMsg)) return;
 
-  await executeStgImportWithLoadingScreen(rawImportedJson, mode, loadedStgResult);
+  if (currentImportType === 'synapsetab' && loadedSynapseResult) {
+    await executeSynapseImportWithLoadingScreen(rawImportedJson, mode, loadedSynapseResult);
+  } else if (currentImportType === 'stg' && loadedStgResult) {
+    await executeStgImportWithLoadingScreen(rawImportedJson, mode, loadedStgResult);
+  }
 });
 
 // Create Backup Manual Action

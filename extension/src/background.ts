@@ -2,6 +2,7 @@ import { SynapseApiClient } from './api.js';
 import { reconcile } from './diff.js';
 import { WorkspaceManager, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
 import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
+import { exportToSynapseFormat, importFromSynapseFormat } from './backup-format.js';
 import { initContextMenus } from './menus.js';
 import { updateActionIcon } from './action-icon.js';
 import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
@@ -1110,6 +1111,39 @@ function setupMessageListener(): void {
 
         case 'TEST_CONNECTION': {
           return await SynapseApiClient.testConnection(message.url, message.secret);
+        }
+
+        case 'EXPORT_SYNAPSE_BACKUP': {
+          const settings = await loadSettings();
+          const localState = await WorkspaceManager.captureLocalState(settings.clientId);
+          const pinnedTabs = await WorkspaceManager.getPinnedTabs();
+          return exportToSynapseFormat(localState.workspaces, pinnedTabs);
+        }
+
+        case 'IMPORT_SYNAPSE_BACKUP': {
+          const { backupData, mode } = message;
+          const parsedResult = importFromSynapseFormat(backupData);
+          isApplyingRemoteDiff = true;
+          try {
+            await WorkspaceManager.importWorkspacesAndTabs(
+              parsedResult.workspaces,
+              parsedResult.pinnedTabs,
+              mode || 'replace'
+            );
+          } finally {
+            setTimeout(() => {
+              isApplyingRemoteDiff = false;
+              refreshTabCount().then(() => triggerPushSync());
+            }, 500);
+          }
+          return {
+            success: true,
+            workspacesCount: parsedResult.workspaces.length,
+            pinnedCount: parsedResult.pinnedTabs.length,
+            tabsCount: parsedResult.tabCount,
+            dividerCount: parsedResult.dividerCount,
+            archivedCount: parsedResult.archivedCount,
+          };
         }
 
         case 'EXPORT_STG': {
