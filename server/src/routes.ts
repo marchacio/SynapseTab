@@ -60,7 +60,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       redis: isRedisConnected ? 'connected' : 'disconnected',
       uptime: Math.floor(process.uptime()),
       timestamp: Math.floor(Date.now() / 1000),
-      version: '1.3.0',
+      version: '1.4.0',
     };
 
     if (!isRedisConnected) {
