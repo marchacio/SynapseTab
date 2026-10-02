@@ -1,6 +1,6 @@
 import { SynapseApiClient } from './api.js';
 import { reconcile } from './diff.js';
-import { WorkspaceManager, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
+import { WorkspaceManager, StoredWorkspace, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
 import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
 import { exportToSynapseFormat, importFromSynapseFormat } from './backup-format.js';
 import { initContextMenus } from './menus.js';
