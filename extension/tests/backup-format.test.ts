@@ -76,10 +76,10 @@ describe('SynapseTab Native Backup Format Tests', () => {
   ];
 
   it('correctly exports workspaces with full fidelity including dividers and archived status', () => {
-    const exported: SynapseTabBackupData = exportToSynapseFormat(sampleWorkspaces, samplePinnedTabs, '1.4.0');
+    const exported: SynapseTabBackupData = exportToSynapseFormat(sampleWorkspaces, samplePinnedTabs, '1.4.1');
 
     expect(exported.format).toBe('synapsetab-backup');
-    expect(exported.version).toBe('1.4.0');
+    expect(exported.version).toBe('1.4.1');
     expect(typeof exported.timestamp).toBe('number');
     expect(typeof exported.exportedAt).toBe('string');
     expect(exported.workspaces.length).toBe(3);
@@ -107,11 +107,11 @@ describe('SynapseTab Native Backup Format Tests', () => {
   });
 
   it('correctly imports native SynapseTab backup with round-trip fidelity', () => {
-    const exported = exportToSynapseFormat(sampleWorkspaces, samplePinnedTabs, '1.4.0');
+    const exported = exportToSynapseFormat(sampleWorkspaces, samplePinnedTabs, '1.4.1');
     const result = importFromSynapseFormat(exported);
 
     expect(result.format).toBe('synapsetab');
-    expect(result.version).toBe('1.4.0');
+    expect(result.version).toBe('1.4.1');
     expect(result.workspaceCount).toBe(3);
     expect(result.activeCount).toBe(1);
     expect(result.dividerCount).toBe(1);
@@ -161,7 +161,7 @@ describe('SynapseTab Native Backup Format Tests', () => {
   it('sanitizes tab URLs and provides safe fallbacks on malformed import', () => {
     const malformed = {
       format: 'synapsetab-backup',
-      version: '1.4.0',
+      version: '1.4.1',
       workspaces: [
         {
           id: 'test-ws',
@@ -184,5 +184,27 @@ describe('SynapseTab Native Backup Format Tests', () => {
   it('throws descriptive error on invalid or empty backup object', () => {
     expect(() => importFromSynapseFormat(null)).toThrow('expected a JSON object');
     expect(() => importFromSynapseFormat({ workspaces: [] })).toThrow('no workspaces or pinned tabs found');
+  });
+
+  it('preserves both customized uppercase and uncustomized empty divider names with full round-trip fidelity', () => {
+    const workspacesWithDividers: Workspace[] = [
+      { id: 'ws-1', name: 'Work', order: 0, isDivider: false, tabs: [] },
+      { id: 'div-custom', name: 'DEVELOPMENT', order: 1, isDivider: true, tabs: [] },
+      { id: 'ws-2', name: 'Personal', order: 2, isDivider: false, tabs: [] },
+      { id: 'div-empty', name: '', order: 3, isDivider: true, tabs: [] },
+    ];
+
+    const backup = exportToSynapseFormat(workspacesWithDividers, [], '1.4.1');
+    expect(backup.workspaces[1].name).toBe('DEVELOPMENT');
+    expect(backup.workspaces[1].isDivider).toBe(true);
+    expect(backup.workspaces[3].name).toBe('');
+    expect(backup.workspaces[3].isDivider).toBe(true);
+
+    const imported = importFromSynapseFormat(backup);
+    expect(imported.dividerCount).toBe(2);
+    expect(imported.workspaces[1].name).toBe('DEVELOPMENT');
+    expect(imported.workspaces[1].isDivider).toBe(true);
+    expect(imported.workspaces[3].name).toBe('');
+    expect(imported.workspaces[3].isDivider).toBe(true);
   });
 });

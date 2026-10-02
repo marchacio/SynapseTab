@@ -98,7 +98,7 @@ export function detectBackupFormat(raw: any): BackupFormatType {
 export function exportToSynapseFormat(
   workspaces: Workspace[],
   pinnedTabs: TabItem[] = [],
-  appVersion: string = '1.4.0'
+  appVersion: string = '1.4.1'
 ): SynapseTabBackupData {
   const exportedWorkspaces: SynapseTabBackupWorkspace[] = workspaces.map((ws, wsIdx) => ({
     id: ws.id,
@@ -183,7 +183,9 @@ export function importFromSynapseFormat(raw: any): SynapseTabImportResult {
 
     return {
       id: rw.id && typeof rw.id === 'string' ? rw.id : `ws-${rwIdx + 1}`,
-      name: rw.name && typeof rw.name === 'string' ? rw.name : (isDivider ? 'Divider' : `Workspace ${rwIdx + 1}`),
+      name: isDivider
+        ? (typeof rw.name === 'string' ? rw.name : '')
+        : (rw.name && typeof rw.name === 'string' ? rw.name : `Workspace ${rwIdx + 1}`),
       order: typeof rw.order === 'number' ? rw.order : rwIdx,
       isDivider,
       isArchived,

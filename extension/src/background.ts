@@ -711,7 +711,7 @@ function setupMessageListener(): void {
           const id = `divider-${crypto.randomUUID().slice(0, 8)}`;
           const newDivider: StoredWorkspace = {
             id,
-            name: message.name || 'Divider',
+            name: message.name || '',
             isDivider: true,
             order: typeof message.targetIndex === 'number' ? message.targetIndex : stored.length,
           };

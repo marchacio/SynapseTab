@@ -560,7 +560,7 @@ function updatePresetChipsState(currentDelay: number): void {
 async function loadAndDisplayInformation(): Promise<void> {
   try {
     const manifest = browser.runtime.getManifest();
-    const version = manifest.version || '1.4.0';
+    const version = manifest.version || '1.4.1';
     if (infoVersionBadge) infoVersionBadge.textContent = `v${version}`;
     if (infoExtensionVersion) infoExtensionVersion.textContent = version;
     if (infoPlatformEngine) {
@@ -1057,7 +1057,7 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
   for (const ws of activeAndDividers) {
     if (ws.isDivider) {
       if (isTabMode) {
-        // Tab Mode: Orderable divider row with drag handle and delete button
+        // Tab Mode: Orderable divider row with drag handle, customizable name input, and delete button
         const divItem = document.createElement('div');
         divItem.className = 'workspace-divider-item';
 
@@ -1067,10 +1067,57 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
         const handle = createDragHandle();
         divLeft.appendChild(handle);
 
-        const label = document.createElement('span');
-        label.className = 'divider-label';
-        label.textContent = ws.name || 'Divider';
-        divLeft.appendChild(label);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'divider-name-input';
+        input.title = 'Divider name (optional)';
+        const isCustomized = Boolean(ws.name && ws.name.trim() !== '' && ws.name.trim() !== 'Divider');
+        input.value = isCustomized ? ws.name.trim().toUpperCase() : '';
+        input.placeholder = '';
+
+        // Prevent drag-and-drop / row click interference
+        input.addEventListener('pointerdown', (e) => e.stopPropagation());
+        input.addEventListener('mousedown', (e) => e.stopPropagation());
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        });
+
+        let originalValue = input.value;
+        const saveDividerName = async () => {
+          const currentVal = input.value.trim().toUpperCase();
+          if (currentVal === originalValue) return;
+          originalValue = currentVal;
+          input.value = currentVal;
+          ws.name = currentVal;
+          await browser.runtime.sendMessage({
+            type: 'UPDATE_WORKSPACE',
+            workspaceId: ws.id,
+            name: currentVal,
+          });
+        };
+
+        input.addEventListener('change', () => {
+          saveDividerName();
+        });
+
+        input.addEventListener('blur', () => {
+          saveDividerName();
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            input.value = originalValue;
+            input.blur();
+          }
+        });
+
+        divLeft.appendChild(input);
 
         const line = document.createElement('div');
         line.className = 'divider-line-fill';
@@ -1081,7 +1128,7 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
         const delBtn = document.createElement('button');
         delBtn.className = 'divider-delete-btn';
         delBtn.title = 'Remove divider';
-        delBtn.innerHTML = '&times;';
+        delBtn.textContent = '×';
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           await browser.runtime.sendMessage({
@@ -1095,10 +1142,27 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
         setupDragAndDrop(divItem, ws.id, activeAndDividers, workspaces);
         workspacesList.appendChild(divItem);
       } else {
-        // Popup Mode: Visual separator
+        // Popup Mode: Visual separator (with optional uppercase custom name on left)
+        const isCustomized = Boolean(ws.name && ws.name.trim() !== '' && ws.name.trim() !== 'Divider');
         const separator = document.createElement('div');
-        separator.className = 'workspace-divider-separator';
         separator.role = 'separator';
+
+        if (isCustomized) {
+          separator.className = 'workspace-divider-separator with-name';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'workspace-divider-name';
+          nameSpan.textContent = ws.name.trim().toUpperCase();
+
+          const line = document.createElement('div');
+          line.className = 'workspace-divider-line';
+
+          separator.appendChild(nameSpan);
+          separator.appendChild(line);
+        } else {
+          separator.className = 'workspace-divider-separator';
+        }
+
         workspacesList.appendChild(separator);
       }
       continue;
@@ -1493,7 +1557,8 @@ async function exploreBackup(backupId: string): Promise<void> {
       const title = document.createElement('div');
       title.className = 'explorer-ws-title';
       if (ws.isDivider) {
-        title.textContent = `⸻ Divider: ${ws.name || 'Divider'}`;
+        const isCustomized = Boolean(ws.name && ws.name.trim() !== '' && ws.name.trim() !== 'Divider');
+        title.textContent = isCustomized ? `⸻ Divider: ${ws.name.trim().toUpperCase()}` : '⸻ Divider';
       } else {
         const count = ws.tabs ? ws.tabs.length : 0;
         const archivedTag = ws.isArchived ? ' [Archived]' : '';
@@ -1567,7 +1632,8 @@ function processJsonContent(content: string, sourceName: string = 'backup.json')
         const chip = document.createElement('span');
         chip.className = 'group-chip';
         if (ws.isDivider) {
-          chip.textContent = `— ${ws.name || 'Divider'} —`;
+          const isCustomized = Boolean(ws.name && ws.name.trim() !== '' && ws.name.trim() !== 'Divider');
+          chip.textContent = isCustomized ? `— ${ws.name.trim().toUpperCase()} —` : '— Divider —';
           chip.style.opacity = '0.6';
           chip.style.borderStyle = 'dashed';
         } else if (ws.isArchived) {
@@ -2489,7 +2555,9 @@ promptArchiveWsBtn?.addEventListener('click', async () => {
 
   if (promptArchiveWsBtn) {
     promptArchiveWsBtn.disabled = true;
-    promptArchiveWsBtn.textContent = nextArchiveState ? 'Archiving...' : 'Restoring...';
+    if (promptArchiveWsText) {
+      promptArchiveWsText.textContent = nextArchiveState ? 'Archiving...' : 'Restoring...';
+    }
   }
 
   try {
@@ -2505,7 +2573,9 @@ promptArchiveWsBtn?.addEventListener('click', async () => {
   } finally {
     if (promptArchiveWsBtn) {
       promptArchiveWsBtn.disabled = false;
-      promptArchiveWsBtn.innerHTML = `<span>📦</span><span id="promptArchiveWsText">${nextArchiveState ? 'Restore / Unarchive' : 'Archive'}</span>`;
+      if (promptArchiveWsText) {
+        promptArchiveWsText.textContent = nextArchiveState ? 'Restore / Unarchive' : 'Archive';
+      }
     }
   }
 });
