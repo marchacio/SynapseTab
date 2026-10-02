@@ -12,14 +12,20 @@ import {
   DebugDataResponse,
 } from '../types.js';
 import { importFromStgFormat, StgImportResult } from '../stg-adapter.js';
+import {
+  importFromSynapseFormat,
+  detectBackupFormat,
+  SynapseTabImportResult,
+} from '../backup-format.js';
 import { getContrastingTextColor } from '../theme/tokens.js';
 import { SynapseApiClient, TestConnectionResult } from '../api.js';
-
 
 let currentWorkspaces: Workspace[] = [];
 let activeWorkspaceId = 'default';
 let currentSettings: SynapseSettings;
 let loadedStgResult: StgImportResult | null = null;
+let loadedSynapseResult: SynapseTabImportResult | null = null;
+let currentImportType: 'synapsetab' | 'stg' | null = null;
 let rawImportedJson: any = null;
 
 // Modal Editing State
@@ -90,6 +96,15 @@ const activeWorkspaceTitle = document.getElementById('activeWorkspaceTitle') as 
 const tabCountBadge = document.getElementById('tabCountBadge') as HTMLElement;
 const tabsList = document.getElementById('tabsList') as HTMLElement;
 
+const addDividerBtn = document.getElementById('addDividerBtn') as HTMLButtonElement | null;
+const archivedSectionWrapper = document.getElementById('archivedSectionWrapper') as HTMLElement | null;
+const archivedHeaderBtn = document.getElementById('archivedHeaderBtn') as HTMLElement | null;
+const toggleArchivedBtn = document.getElementById('toggleArchivedBtn') as HTMLButtonElement | null;
+const archivedChevronIcon = document.getElementById('archivedChevronIcon') as HTMLElement | null;
+const archivedCountBadge = document.getElementById('archivedCountBadge') as HTMLElement | null;
+const archivedWorkspacesContent = document.getElementById('archivedWorkspacesContent') as HTMLElement | null;
+const archivedWorkspacesList = document.getElementById('archivedWorkspacesList') as HTMLElement | null;
+
 // Workspace Edit Modal Elements
 const wsEditModal = document.getElementById('wsEditModal') as HTMLElement;
 const closeWsEditModalBtn = document.getElementById('closeWsEditModalBtn') as HTMLButtonElement;
@@ -107,6 +122,8 @@ const wsColorPalette = document.getElementById('wsColorPalette') as HTMLElement;
 const wsPreviewBadge = document.getElementById('wsPreviewBadge') as HTMLElement;
 const wsPreviewName = document.getElementById('wsPreviewName') as HTMLElement;
 const promptDeleteWsBtn = document.getElementById('promptDeleteWsBtn') as HTMLButtonElement;
+const promptArchiveWsBtn = document.getElementById('promptArchiveWsBtn') as HTMLButtonElement | null;
+const promptArchiveWsText = document.getElementById('promptArchiveWsText') as HTMLSpanElement | null;
 const wsDeleteConfirmBox = document.getElementById('wsDeleteConfirmBox') as HTMLElement;
 const wsDeleteConfirmText = document.getElementById('wsDeleteConfirmText') as HTMLElement;
 const confirmDeleteWsBtn = document.getElementById('confirmDeleteWsBtn') as HTMLButtonElement;
@@ -127,15 +144,19 @@ const explorerSnapshotName = document.getElementById('explorerSnapshotName') as 
 const explorerSnapshotDate = document.getElementById('explorerSnapshotDate') as HTMLElement;
 const explorerContent = document.getElementById('explorerContent') as HTMLElement;
 
-// Import / Export elements
+// Backup & Restore elements
+const exportSynapseBtn = document.getElementById('exportSynapseBtn') as HTMLButtonElement | null;
+const importSynapseBtn = document.getElementById('importSynapseBtn') as HTMLButtonElement | null;
 const exportStgBtn = document.getElementById('exportStgBtn') as HTMLButtonElement;
-const exportBadge = document.getElementById('exportBadge') as HTMLElement;
+const importStgBtn = document.getElementById('importStgBtn') as HTMLButtonElement | null;
+const exportBadge = document.getElementById('exportBadge') as HTMLElement | null;
 const stgFileInput = document.getElementById('stgFileInput') as HTMLInputElement;
 const stgDropZone = document.getElementById('stgDropZone') as HTMLElement;
 const dropZoneText = document.getElementById('dropZoneText') as HTMLElement;
 const importPreviewCard = document.getElementById('importPreviewCard') as HTMLElement;
 const previewFileName = document.getElementById('previewFileName') as HTMLElement;
 const previewVersionBadge = document.getElementById('previewVersionBadge') as HTMLElement;
+const previewWarningNotice = document.getElementById('previewWarningNotice') as HTMLElement | null;
 const previewWsCount = document.getElementById('previewWsCount') as HTMLElement;
 const previewPinnedCount = document.getElementById('previewPinnedCount') as HTMLElement;
 const previewTabsCount = document.getElementById('previewTabsCount') as HTMLElement;
@@ -284,6 +305,41 @@ async function executeStgImportWithLoadingScreen(
       'Import Completed Successfully!',
       `Restored ${res.workspacesCount} workspaces and ${res.tabsCount + res.pinnedCount} tabs.`,
       'Clean state has been synchronized and persisted.',
+      async () => {
+        await switchSection('workspaces');
+        await refreshState();
+      }
+    );
+  } catch (err: any) {
+    failRestoreLoadingScreen('Import Failed', err.message || 'Failed to import backup.');
+  }
+}
+
+async function executeSynapseImportWithLoadingScreen(
+  backupData: any,
+  mode: 'replace' | 'merge',
+  info: { workspaceCount: number; tabCount: number; pinnedCount: number }
+): Promise<void> {
+  showRestoreLoadingScreen(
+    'Importing SynapseTab Backup',
+    `Restoring ${info.workspaceCount} workspaces and ${info.tabCount + info.pinnedCount} tabs (${mode} mode)...`,
+    'Materializing tabs in suspended state with full fidelity. SynapseTab will remain in foreground.'
+  );
+
+  try {
+    const res = await browser.runtime.sendMessage({
+      type: 'IMPORT_SYNAPSE_BACKUP',
+      backupData,
+      mode,
+    });
+    if (res?.error) {
+      throw new Error(res.error);
+    }
+    await refreshState();
+    completeRestoreLoadingScreen(
+      'Import Completed Successfully!',
+      `Restored ${res.workspacesCount} workspaces (${res.dividerCount || 0} dividers, ${res.archivedCount || 0} archived) and ${res.tabsCount + res.pinnedCount} tabs.`,
+      'State synchronized and persisted with full fidelity.',
       async () => {
         await switchSection('workspaces');
         await refreshState();
@@ -504,7 +560,7 @@ function updatePresetChipsState(currentDelay: number): void {
 async function loadAndDisplayInformation(): Promise<void> {
   try {
     const manifest = browser.runtime.getManifest();
-    const version = manifest.version || '1.3.0';
+    const version = manifest.version || '1.4.0';
     if (infoVersionBadge) infoVersionBadge.textContent = `v${version}`;
     if (infoExtensionVersion) infoExtensionVersion.textContent = version;
     if (infoPlatformEngine) {
@@ -589,6 +645,9 @@ async function refreshState(): Promise<void> {
     customValue: ws.customValue,
     color: ws.color,
     icon: ws.icon,
+    order: ws.order,
+    isDivider: ws.isDivider,
+    isArchived: ws.isArchived,
     tabs: (wsMap.get(ws.id) || []).map((t, idx) => ({
       uuid: '',
       url: t.url || '',
@@ -602,13 +661,6 @@ async function refreshState(): Promise<void> {
   }));
 
   renderWorkspacesList(currentWorkspaces, activeWorkspaceId);
-
-  // Render Active Workspace Tabs
-  const currentWs = currentWorkspaces.find((w) => w.id === activeWorkspaceId);
-  activeWorkspaceTitle.textContent = currentWs ? `Tabs in ${currentWs.name}` : 'Active Tabs';
-  const activeTabs = currentWs ? currentWs.tabs : [];
-  tabCountBadge.textContent = `${activeTabs.length} tab${activeTabs.length === 1 ? '' : 's'}`;
-  renderTabsList(activeTabs, currentWorkspaces);
 }
 
 /**
@@ -846,15 +898,37 @@ function openWorkspaceEditModal(ws: Workspace, allWorkspaces: Workspace[]): void
 
   setModalCustomType(type);
 
-  // Disable delete button if only 1 workspace exists
-  if (allWorkspaces.length <= 1) {
+  // Disable delete button if only 1 active workspace exists
+  const activeWsCount = allWorkspaces.filter((w) => !w.isDivider && !w.isArchived).length;
+  if (activeWsCount <= 1 && !ws.isArchived) {
     promptDeleteWsBtn.disabled = true;
-    promptDeleteWsBtn.title = 'Cannot delete the only remaining workspace';
+    promptDeleteWsBtn.title = 'Cannot delete the only remaining active workspace';
     promptDeleteWsBtn.style.opacity = '0.35';
   } else {
     promptDeleteWsBtn.disabled = false;
     promptDeleteWsBtn.title = 'Delete workspace';
     promptDeleteWsBtn.style.opacity = '1';
+  }
+
+  // Setup archive button
+  if (promptArchiveWsBtn && promptArchiveWsText) {
+    if (ws.isArchived) {
+      promptArchiveWsText.textContent = 'Restore / Unarchive';
+      promptArchiveWsBtn.title = 'Restore this workspace to active list';
+      promptArchiveWsBtn.disabled = false;
+      promptArchiveWsBtn.style.opacity = '1';
+    } else {
+      promptArchiveWsText.textContent = 'Archive';
+      promptArchiveWsBtn.title = 'Archive workspace (hide from active list)';
+      if (activeWsCount <= 1) {
+        promptArchiveWsBtn.disabled = true;
+        promptArchiveWsBtn.title = 'Cannot archive the only remaining active workspace';
+        promptArchiveWsBtn.style.opacity = '0.35';
+      } else {
+        promptArchiveWsBtn.disabled = false;
+        promptArchiveWsBtn.style.opacity = '1';
+      }
+    }
   }
 
   wsEditModal.classList.remove('hidden');
@@ -869,15 +943,179 @@ function closeWorkspaceEditModal(): void {
   editingWorkspace = null;
 }
 
+function createDragHandle(): HTMLElement {
+  const handle = document.createElement('div');
+  handle.className = 'drag-handle';
+  handle.title = 'Drag to reorder';
+  handle.innerHTML = `<svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="8" cy="5" r="2"/>
+    <circle cx="16" cy="5" r="2"/>
+    <circle cx="8" cy="12" r="2"/>
+    <circle cx="16" cy="12" r="2"/>
+    <circle cx="8" cy="19" r="2"/>
+    <circle cx="16" cy="19" r="2"/>
+  </svg>`;
+  return handle;
+}
+
+let draggedWorkspaceId: string | null = null;
+
+function setupDragAndDrop(
+  item: HTMLElement,
+  wsId: string,
+  allVisibleWorkspaces: Workspace[],
+  allWorkspaces: Workspace[]
+): void {
+  item.setAttribute('draggable', 'true');
+
+  item.addEventListener('dragstart', (e) => {
+    draggedWorkspaceId = wsId;
+    item.classList.add('is-dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', wsId);
+    }
+  });
+
+  item.addEventListener('dragend', () => {
+    draggedWorkspaceId = null;
+    item.classList.remove('is-dragging');
+    document.querySelectorAll('.drop-target-above, .drop-target-below').forEach((el) => {
+      el.classList.remove('drop-target-above', 'drop-target-below');
+    });
+  });
+
+  item.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!draggedWorkspaceId || draggedWorkspaceId === wsId) return;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+
+    const rect = item.getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    if (e.clientY < midpoint) {
+      item.classList.add('drop-target-above');
+      item.classList.remove('drop-target-below');
+    } else {
+      item.classList.add('drop-target-below');
+      item.classList.remove('drop-target-above');
+    }
+  });
+
+  item.addEventListener('dragleave', () => {
+    item.classList.remove('drop-target-above', 'drop-target-below');
+  });
+
+  item.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    item.classList.remove('drop-target-above', 'drop-target-below');
+    if (!draggedWorkspaceId || draggedWorkspaceId === wsId) return;
+
+    const rect = item.getBoundingClientRect();
+    const insertBefore = e.clientY < rect.top + rect.height / 2;
+
+    const currentVisibleIds = allVisibleWorkspaces.map((w) => w.id);
+    const fromIndex = currentVisibleIds.indexOf(draggedWorkspaceId);
+    let toIndex = currentVisibleIds.indexOf(wsId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    currentVisibleIds.splice(fromIndex, 1);
+    toIndex = currentVisibleIds.indexOf(wsId);
+    if (!insertBefore) {
+      toIndex += 1;
+    }
+    currentVisibleIds.splice(toIndex, 0, draggedWorkspaceId);
+
+    // Keep archived workspaces at the end of the order list
+    const archivedIds = allWorkspaces.filter((w) => w.isArchived).map((w) => w.id);
+    const finalOrderedIds = [...currentVisibleIds, ...archivedIds];
+
+    await browser.runtime.sendMessage({
+      type: 'REORDER_WORKSPACES',
+      orderedIds: finalOrderedIds,
+    });
+    await refreshState();
+  });
+}
+
 /**
- * Renders the workspaces list with visual customization badges and an edit button.
+ * Renders the workspaces list with visual customization badges, drag-and-drop handles, dividers, and edit/archive actions.
  */
 function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
   workspacesList.replaceChildren();
 
-  for (const ws of workspaces) {
+  const isTabMode = document.body.classList.contains('tab-mode');
+  const activeAndDividers = workspaces.filter((w) => !w.isArchived);
+  const archived = workspaces.filter((w) => w.isArchived);
+
+  // Update archived count badge
+  if (isTabMode && archivedCountBadge) {
+    archivedCountBadge.textContent = String(archived.length);
+  }
+
+  for (const ws of activeAndDividers) {
+    if (ws.isDivider) {
+      if (isTabMode) {
+        // Tab Mode: Orderable divider row with drag handle and delete button
+        const divItem = document.createElement('div');
+        divItem.className = 'workspace-divider-item';
+
+        const divLeft = document.createElement('div');
+        divLeft.className = 'divider-left';
+
+        const handle = createDragHandle();
+        divLeft.appendChild(handle);
+
+        const label = document.createElement('span');
+        label.className = 'divider-label';
+        label.textContent = ws.name || 'Divider';
+        divLeft.appendChild(label);
+
+        const line = document.createElement('div');
+        line.className = 'divider-line-fill';
+        divLeft.appendChild(line);
+
+        divItem.appendChild(divLeft);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'divider-delete-btn';
+        delBtn.title = 'Remove divider';
+        delBtn.innerHTML = '&times;';
+        delBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await browser.runtime.sendMessage({
+            type: 'DELETE_WORKSPACE',
+            workspaceId: ws.id,
+          });
+          await refreshState();
+        });
+        divItem.appendChild(delBtn);
+
+        setupDragAndDrop(divItem, ws.id, activeAndDividers, workspaces);
+        workspacesList.appendChild(divItem);
+      } else {
+        // Popup Mode: Visual separator
+        const separator = document.createElement('div');
+        separator.className = 'workspace-divider-separator';
+        separator.role = 'separator';
+        workspacesList.appendChild(separator);
+      }
+      continue;
+    }
+
+    // Regular active workspace item
     const item = document.createElement('div');
     item.className = `workspace-item ${ws.id === activeId ? 'active' : ''}`;
+
+    // Left group: contains drag handle (if tab mode) + workspace badge, name, tab count
+    const leftGroup = document.createElement('div');
+    leftGroup.className = 'workspace-left';
+
+    if (isTabMode) {
+      const handle = createDragHandle();
+      leftGroup.appendChild(handle);
+    }
 
     const info = document.createElement('div');
     info.className = 'workspace-info';
@@ -899,20 +1137,35 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
     count.textContent = `(${tabCount})`;
     info.appendChild(count);
 
-    item.appendChild(info);
+    leftGroup.appendChild(info);
+    item.appendChild(leftGroup);
 
-    // Click on item switches workspace
-    item.addEventListener('click', async () => {
-      if (ws.id !== activeId) {
-        await browser.runtime.sendMessage({
-          type: 'SWITCH_WORKSPACE',
-          workspaceId: ws.id,
-        });
-        await refreshState();
+    // Click on item:
+    // In Tab Mode (Customization Page): tapping opens workspace settings modal!
+    // In Popup Mode: tapping switches workspace!
+    item.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest('.ws-edit-btn') ||
+        target.closest('.drag-handle')
+      ) {
+        return;
+      }
+
+      if (isTabMode) {
+        openWorkspaceEditModal(ws, workspaces);
+      } else {
+        if (ws.id !== activeId) {
+          await browser.runtime.sendMessage({
+            type: 'SWITCH_WORKSPACE',
+            workspaceId: ws.id,
+          });
+          await refreshState();
+        }
       }
     });
 
-    // 4. Edit action icon button
+    // Actions (edit button only)
     const actions = document.createElement('div');
     actions.className = 'ws-actions';
 
@@ -920,67 +1173,98 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
     editBtn.className = 'ws-edit-btn';
     editBtn.title = `Configure workspace "${ws.name}"`;
     editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
-
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openWorkspaceEditModal(ws, workspaces);
     });
-
     actions.appendChild(editBtn);
+
     item.appendChild(actions);
 
+    if (isTabMode) {
+      setupDragAndDrop(item, ws.id, activeAndDividers, workspaces);
+    }
     workspacesList.appendChild(item);
   }
-}
 
-/**
- * Renders active tabs in current workspace as clean clickable list items (without action buttons).
- */
-function renderTabsList(tabs: any[], _allWorkspaces: Workspace[]): void {
-  tabsList.replaceChildren();
+  // Render Archived Workspaces List (ONLY in Tab Mode)
+  if (isTabMode && archivedWorkspacesList) {
+    archivedWorkspacesList.replaceChildren();
 
-  if (tabs.length === 0) {
-    const empty = document.createElement('div');
-    empty.style.padding = '12px';
-    empty.style.textAlign = 'center';
-    empty.style.color = 'var(--text-muted)';
-    empty.textContent = 'No open tabs in this workspace.';
-    tabsList.appendChild(empty);
-    return;
-  }
+    if (archived.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'archived-empty-msg';
+      emptyMsg.textContent = 'No archived workspaces.';
+      archivedWorkspacesList.appendChild(emptyMsg);
+    } else {
+      for (const aws of archived) {
+        const row = document.createElement('div');
+        row.className = 'archived-workspace-item';
 
-  for (const tab of tabs) {
-    const row = document.createElement('div');
-    row.className = 'tab-row';
-    row.style.cursor = 'pointer';
+        const rowInfo = document.createElement('div');
+        rowInfo.className = 'workspace-info';
+        rowInfo.style.cursor = 'pointer';
 
-    const info = document.createElement('div');
-    info.className = 'tab-info';
+        const badge = createWorkspaceBadge(aws);
+        rowInfo.appendChild(badge);
 
-    const img = document.createElement('img');
-    img.className = 'tab-favicon';
-    img.src = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
-    img.onerror = () => {
-      img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>';
-    };
+        const name = document.createElement('span');
+        name.className = 'ws-name';
+        name.textContent = aws.name;
+        rowInfo.appendChild(name);
 
-    const title = document.createElement('span');
-    title.className = 'tab-title-text';
-    title.textContent = tab.title || tab.url || 'Tab';
-    title.title = tab.url;
+        const count = document.createElement('span');
+        count.className = 'ws-tabs-count';
+        const tabCount = aws.tabs ? aws.tabs.length : 0;
+        count.textContent = `(${tabCount} tabs)`;
+        rowInfo.appendChild(count);
 
-    info.appendChild(img);
-    info.appendChild(title);
-    row.appendChild(info);
+        rowInfo.addEventListener('click', () => {
+          openWorkspaceEditModal(aws, workspaces);
+        });
 
-    row.addEventListener('click', async () => {
-      if (tab.localTabId !== undefined) {
-        await browser.tabs.update(tab.localTabId, { active: true });
-        window.close();
+        row.appendChild(rowInfo);
+
+        const actions = document.createElement('div');
+        actions.className = 'archived-actions';
+
+        // Restore button
+        const restoreBtn = document.createElement('button');
+        restoreBtn.className = 'btn btn-xs btn-secondary';
+        restoreBtn.textContent = 'Restore';
+        restoreBtn.title = 'Restore workspace to active list';
+        restoreBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await browser.runtime.sendMessage({
+            type: 'ARCHIVE_WORKSPACE',
+            workspaceId: aws.id,
+            archive: false,
+          });
+          await refreshState();
+        });
+        actions.appendChild(restoreBtn);
+
+        // Delete button
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-xs btn-ghost btn-danger';
+        delBtn.textContent = 'Delete';
+        delBtn.title = 'Permanently delete archived workspace and tabs';
+        delBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (confirm(`Permanently delete archived workspace "${aws.name}"?`)) {
+            await browser.runtime.sendMessage({
+              type: 'DELETE_WORKSPACE',
+              workspaceId: aws.id,
+            });
+            await refreshState();
+          }
+        });
+        actions.appendChild(delBtn);
+
+        row.appendChild(actions);
+        archivedWorkspacesList.appendChild(row);
       }
-    });
-
-    tabsList.appendChild(row);
+    }
   }
 }
 
@@ -1103,7 +1387,35 @@ async function loadAndRenderBackups(): Promise<void> {
         }
       });
 
+      // Download button
+      const downloadBtn = document.createElement('button');
+      downloadBtn.className = 'btn btn-sm btn-ghost';
+      downloadBtn.textContent = 'JSON';
+      downloadBtn.title = 'Download SynapseTab JSON backup file';
+      downloadBtn.addEventListener('click', async () => {
+        try {
+          const backupData = await browser.runtime.sendMessage({
+            type: 'DOWNLOAD_BACKUP',
+            backupId: bk.id,
+          });
+          const jsonStr = JSON.stringify(backupData, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const dateStr = new Date(bk.timestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          a.href = url;
+          a.download = `synapsetab-backup-${dateStr}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (err: any) {
+          alert(`Download failed: ${err.message}`);
+        }
+      });
+
       actions.appendChild(exploreBtn);
+      actions.appendChild(downloadBtn);
       actions.appendChild(restoreBtn);
       actions.appendChild(deleteBtn);
 
@@ -1146,7 +1458,26 @@ async function exploreBackup(backupId: string): Promise<void> {
     explorerSnapshotDate.textContent = new Date(record.timestamp).toLocaleString();
     explorerContent.replaceChildren();
 
-    if (!record.snapshot || !record.snapshot.workspaces || record.snapshot.workspaces.length === 0) {
+    const workspacesToExplore = (record.backup && record.backup.workspaces) || record.snapshot?.workspaces || [];
+
+    if (record.backup?.pinnedTabs && record.backup.pinnedTabs.length > 0) {
+      const pinnedGroup = document.createElement('div');
+      pinnedGroup.className = 'explorer-ws-group';
+      const pTitle = document.createElement('div');
+      pTitle.className = 'explorer-ws-title';
+      pTitle.textContent = `📌 Pinned Tabs (${record.backup.pinnedTabs.length})`;
+      pinnedGroup.appendChild(pTitle);
+      for (const tab of record.backup.pinnedTabs) {
+        const tabItem = document.createElement('div');
+        tabItem.className = 'explorer-tab-item';
+        tabItem.textContent = tab.title || tab.url || 'Pinned Tab';
+        tabItem.title = tab.url;
+        pinnedGroup.appendChild(tabItem);
+      }
+      explorerContent.appendChild(pinnedGroup);
+    }
+
+    if (workspacesToExplore.length === 0) {
       const emptyEl = document.createElement('div');
       emptyEl.style.color = 'var(--text-muted)';
       emptyEl.style.fontSize = '11px';
@@ -1155,14 +1486,19 @@ async function exploreBackup(backupId: string): Promise<void> {
       return;
     }
 
-    for (const ws of record.snapshot.workspaces) {
+    for (const ws of workspacesToExplore) {
       const wsGroup = document.createElement('div');
       wsGroup.className = 'explorer-ws-group';
 
       const title = document.createElement('div');
       title.className = 'explorer-ws-title';
-      const count = ws.tabs ? ws.tabs.length : 0;
-      title.textContent = `📁 ${ws.name} (${count} tab${count === 1 ? '' : 's'})`;
+      if (ws.isDivider) {
+        title.textContent = `⸻ Divider: ${ws.name || 'Divider'}`;
+      } else {
+        const count = ws.tabs ? ws.tabs.length : 0;
+        const archivedTag = ws.isArchived ? ' [Archived]' : '';
+        title.textContent = `📁 ${ws.name}${archivedTag} (${count} tab${count === 1 ? '' : 's'})`;
+      }
       wsGroup.appendChild(title);
 
       if (ws.tabs && ws.tabs.length > 0) {
@@ -1173,7 +1509,7 @@ async function exploreBackup(backupId: string): Promise<void> {
           tabItem.title = tab.url;
           wsGroup.appendChild(tabItem);
         }
-      } else {
+      } else if (!ws.isDivider) {
         const noTab = document.createElement('div');
         noTab.className = 'explorer-tab-item';
         noTab.style.fontStyle = 'italic';
@@ -1201,32 +1537,90 @@ function processJsonContent(content: string, sourceName: string = 'backup.json')
 
   try {
     rawImportedJson = JSON.parse(content);
-    loadedStgResult = importFromStgFormat(rawImportedJson);
+    const format = detectBackupFormat(rawImportedJson);
 
-    previewFileName.textContent = sourceName;
-    previewVersionBadge.textContent = `STG ${loadedStgResult.version}`;
-    previewWsCount.textContent = `${loadedStgResult.groupCount} workspace${loadedStgResult.groupCount === 1 ? '' : 's'}`;
-    previewPinnedCount.textContent = `${loadedStgResult.pinnedCount} pinned`;
-    previewTabsCount.textContent = `${loadedStgResult.tabCount} total tabs`;
+    if (format === 'synapsetab') {
+      currentImportType = 'synapsetab';
+      loadedSynapseResult = importFromSynapseFormat(rawImportedJson);
+      loadedStgResult = null;
 
-    // Render group chips
-    previewGroupsChips.innerHTML = '';
-    for (const ws of loadedStgResult.workspaces) {
-      const chip = document.createElement('span');
-      chip.className = 'group-chip';
-      chip.textContent = ws.name;
+      previewFileName.textContent = sourceName;
+      previewVersionBadge.textContent = `SynapseTab v${loadedSynapseResult.version} (Native)`;
+      previewVersionBadge.className = 'badge badge-accent';
+      previewWarningNotice?.classList.add('hidden');
 
-      const tabsCountSpan = document.createElement('span');
-      tabsCountSpan.className = 'group-chip-tabs';
-      tabsCountSpan.textContent = `(${ws.tabs.length})`;
-      chip.appendChild(tabsCountSpan);
+      const parts: string[] = [`${loadedSynapseResult.activeCount} active`];
+      if (loadedSynapseResult.dividerCount > 0) {
+        parts.push(`${loadedSynapseResult.dividerCount} divider${loadedSynapseResult.dividerCount === 1 ? '' : 's'}`);
+      }
+      if (loadedSynapseResult.archivedCount > 0) {
+        parts.push(`${loadedSynapseResult.archivedCount} archived`);
+      }
 
-      previewGroupsChips.appendChild(chip);
+      previewWsCount.textContent = `${loadedSynapseResult.workspaceCount} workspaces (${parts.join(', ')})`;
+      previewPinnedCount.textContent = `${loadedSynapseResult.pinnedCount} pinned`;
+      previewTabsCount.textContent = `${loadedSynapseResult.tabCount} total tabs`;
+
+      // Render group chips with badges
+      previewGroupsChips.innerHTML = '';
+      for (const ws of loadedSynapseResult.workspaces) {
+        const chip = document.createElement('span');
+        chip.className = 'group-chip';
+        if (ws.isDivider) {
+          chip.textContent = `— ${ws.name || 'Divider'} —`;
+          chip.style.opacity = '0.6';
+          chip.style.borderStyle = 'dashed';
+        } else if (ws.isArchived) {
+          chip.textContent = `📦 ${ws.name} (${ws.tabs.length})`;
+          chip.style.opacity = '0.75';
+        } else {
+          chip.textContent = ws.name;
+          const tabsCountSpan = document.createElement('span');
+          tabsCountSpan.className = 'group-chip-tabs';
+          tabsCountSpan.textContent = `(${ws.tabs.length})`;
+          chip.appendChild(tabsCountSpan);
+        }
+        previewGroupsChips.appendChild(chip);
+      }
+
+      importPreviewCard.classList.remove('hidden');
+    } else if (format === 'stg') {
+      currentImportType = 'stg';
+      loadedStgResult = importFromStgFormat(rawImportedJson);
+      loadedSynapseResult = null;
+
+      previewFileName.textContent = sourceName;
+      previewVersionBadge.textContent = `STG ${loadedStgResult.version} (Compatibility)`;
+      previewVersionBadge.className = 'badge badge-warning';
+      previewWarningNotice?.classList.remove('hidden');
+
+      previewWsCount.textContent = `${loadedStgResult.groupCount} workspaces`;
+      previewPinnedCount.textContent = `${loadedStgResult.pinnedCount} pinned`;
+      previewTabsCount.textContent = `${loadedStgResult.tabCount} total tabs`;
+
+      // Render group chips
+      previewGroupsChips.innerHTML = '';
+      for (const ws of loadedStgResult.workspaces) {
+        const chip = document.createElement('span');
+        chip.className = 'group-chip';
+        chip.textContent = ws.name;
+
+        const tabsCountSpan = document.createElement('span');
+        tabsCountSpan.className = 'group-chip-tabs';
+        tabsCountSpan.textContent = `(${ws.tabs.length})`;
+        chip.appendChild(tabsCountSpan);
+
+        previewGroupsChips.appendChild(chip);
+      }
+
+      importPreviewCard.classList.remove('hidden');
+    } else {
+      throw new Error('Unrecognized JSON format. File must be a SynapseTab backup or Simple Tab Groups export.');
     }
-
-    importPreviewCard.classList.remove('hidden');
   } catch (err: any) {
     loadedStgResult = null;
+    loadedSynapseResult = null;
+    currentImportType = null;
     rawImportedJson = null;
     importPreviewCard.classList.add('hidden');
     importFeedbackMsg.className = 'import-feedback error';
@@ -1292,14 +1686,14 @@ pushNowBtn.addEventListener('click', async () => {
 
 settingsBtn.addEventListener('click', async () => {
   if (!document.body.classList.contains('tab-mode')) {
-    // Popup Mode: Open dedicated full-page tab
+    // Popup Mode: Open dedicated full-page tab with workspaces section active
     await browser.tabs.create({
-      url: browser.runtime.getURL('popup/index.html?mode=tab&section=settings'),
+      url: browser.runtime.getURL('popup/index.html?mode=tab&section=workspaces'),
     });
     window.close();
   } else {
-    // Tab Mode: Switch to settings section
-    await switchSection('settings');
+    // Tab Mode: Switch to workspaces section
+    await switchSection('workspaces');
   }
 });
 
@@ -1319,10 +1713,44 @@ closeExplorerBtn.addEventListener('click', () => {
   backupExplorer.classList.add('hidden');
 });
 
+// Export SynapseTab Native JSON Action
+exportSynapseBtn?.addEventListener('click', async () => {
+  if (!exportSynapseBtn) return;
+  exportSynapseBtn.disabled = true;
+
+  try {
+    const backupData = await browser.runtime.sendMessage({ type: 'EXPORT_SYNAPSE_BACKUP' });
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+    const filename = `synapsetab-backup-${dateStr}_${timeStr}.json`;
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    alert(`Export failed: ${err.message}`);
+  } finally {
+    exportSynapseBtn.disabled = false;
+  }
+});
+
+// Import SynapseTab Button Action -> Open file picker
+importSynapseBtn?.addEventListener('click', () => {
+  stgFileInput?.click();
+});
+
 // Export STG JSON Action
-exportStgBtn.addEventListener('click', async () => {
+exportStgBtn?.addEventListener('click', async () => {
   exportStgBtn.disabled = true;
-  exportStgBtn.textContent = 'Generating export...';
 
   try {
     const stgData = await browser.runtime.sendMessage({ type: 'EXPORT_STG' });
@@ -1342,24 +1770,16 @@ exportStgBtn.addEventListener('click', async () => {
     downloadLink.click();
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
-
-    exportBadge.textContent = 'Downloaded!';
-    setTimeout(() => {
-      exportBadge.textContent = 'Ready';
-    }, 3000);
   } catch (err: any) {
     alert(`Export failed: ${err.message}`);
   } finally {
     exportStgBtn.disabled = false;
-    exportStgBtn.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-      </svg>
-      Export JSON File
-    `;
   }
+});
+
+// Import STG Button Action -> Open file picker
+importStgBtn?.addEventListener('click', () => {
+  stgFileInput?.click();
 });
 
 // Import STG File Input & Drag and Drop
@@ -1652,19 +2072,27 @@ clearDebugLogsBtn.addEventListener('click', async () => {
 
 // Execute Import
 executeImportBtn.addEventListener('click', async () => {
-  if (!rawImportedJson || !loadedStgResult) return;
+  if (!rawImportedJson || (!loadedStgResult && !loadedSynapseResult)) return;
 
   const modeRadio = document.querySelector('input[name="importMode"]:checked') as HTMLInputElement;
   const mode = (modeRadio ? modeRadio.value : 'replace') as 'replace' | 'merge';
 
+  const wsCount = loadedSynapseResult ? loadedSynapseResult.workspaceCount : loadedStgResult!.groupCount;
+  const pinnedCount = loadedSynapseResult ? loadedSynapseResult.pinnedCount : loadedStgResult!.pinnedCount;
+  const formatName = currentImportType === 'synapsetab' ? 'SynapseTab' : 'STG';
+
   const confirmMsg =
     mode === 'replace'
-      ? `Replace all current workspaces with ${loadedStgResult.groupCount} workspaces and ${loadedStgResult.pinnedCount} pinned tabs?`
-      : `Merge ${loadedStgResult.groupCount} workspaces and ${loadedStgResult.pinnedCount} pinned tabs into your current setup?`;
+      ? `Replace all current workspaces with ${wsCount} ${formatName} workspaces and ${pinnedCount} pinned tabs?`
+      : `Merge ${wsCount} ${formatName} workspaces and ${pinnedCount} pinned tabs into your current setup?`;
 
   if (!confirm(confirmMsg)) return;
 
-  await executeStgImportWithLoadingScreen(rawImportedJson, mode, loadedStgResult);
+  if (currentImportType === 'synapsetab' && loadedSynapseResult) {
+    await executeSynapseImportWithLoadingScreen(rawImportedJson, mode, loadedSynapseResult);
+  } else if (currentImportType === 'stg' && loadedStgResult) {
+    await executeStgImportWithLoadingScreen(rawImportedJson, mode, loadedStgResult);
+  }
 });
 
 // Create Backup Manual Action
@@ -2046,11 +2474,65 @@ saveWsEditBtn?.addEventListener('click', async () => {
 
 promptDeleteWsBtn?.addEventListener('click', () => {
   if (!editingWorkspace) return;
-  if (currentWorkspaces.length <= 1) return;
+  const activeCount = currentWorkspaces.filter((w) => !w.isDivider && !w.isArchived).length;
+  if (activeCount <= 1 && !editingWorkspace.isArchived) return;
 
   const tabCount = editingWorkspace.tabs ? editingWorkspace.tabs.length : 0;
   wsDeleteConfirmText.textContent = `Are you sure you want to delete workspace "${editingWorkspace.name}" and close all its ${tabCount} tab${tabCount === 1 ? '' : 's'}?`;
   wsDeleteConfirmBox.classList.remove('hidden');
+});
+
+promptArchiveWsBtn?.addEventListener('click', async () => {
+  if (!editingWorkspace) return;
+  const isArchived = Boolean(editingWorkspace.isArchived);
+  const nextArchiveState = !isArchived;
+
+  if (promptArchiveWsBtn) {
+    promptArchiveWsBtn.disabled = true;
+    promptArchiveWsBtn.textContent = nextArchiveState ? 'Archiving...' : 'Restoring...';
+  }
+
+  try {
+    await browser.runtime.sendMessage({
+      type: 'ARCHIVE_WORKSPACE',
+      workspaceId: editingWorkspace.id,
+      archive: nextArchiveState,
+    });
+    closeWorkspaceEditModal();
+    await refreshState();
+  } catch (err: any) {
+    alert(err.message || 'Failed to archive workspace');
+  } finally {
+    if (promptArchiveWsBtn) {
+      promptArchiveWsBtn.disabled = false;
+      promptArchiveWsBtn.innerHTML = `<span>📦</span><span id="promptArchiveWsText">${nextArchiveState ? 'Restore / Unarchive' : 'Archive'}</span>`;
+    }
+  }
+});
+
+addDividerBtn?.addEventListener('click', async () => {
+  await browser.runtime.sendMessage({
+    type: 'CREATE_DIVIDER',
+  });
+  await refreshState();
+});
+
+let isArchivedExpanded = false;
+function toggleArchivedView(): void {
+  isArchivedExpanded = !isArchivedExpanded;
+  if (isArchivedExpanded) {
+    archivedWorkspacesContent?.classList.remove('hidden');
+    archivedChevronIcon?.classList.add('expanded');
+  } else {
+    archivedWorkspacesContent?.classList.add('hidden');
+    archivedChevronIcon?.classList.remove('expanded');
+  }
+}
+
+archivedHeaderBtn?.addEventListener('click', toggleArchivedView);
+toggleArchivedBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleArchivedView();
 });
 
 cancelDeleteWsBtn?.addEventListener('click', () => {

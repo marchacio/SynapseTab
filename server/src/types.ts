@@ -21,6 +21,9 @@ export interface Workspace {
   customValue?: string;
   color?: string;
   icon?: string;
+  order?: number;
+  isDivider?: boolean;
+  isArchived?: boolean;
 }
 
 export interface SyncPayload {
@@ -58,8 +61,11 @@ export interface BackupMetadata {
   size_bytes?: number;
 }
 
+import type { SynapseTabBackupData } from './backup-format.js';
+
 export interface BackupRecord extends BackupMetadata {
   snapshot: SyncPayload;
+  backup?: SynapseTabBackupData;
 }
 
 export interface BackupConfig {

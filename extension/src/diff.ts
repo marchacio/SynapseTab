@@ -50,6 +50,9 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
         customValue: rWs.customValue,
         color: rWs.color,
         icon: rWs.icon,
+        order: rWs.order,
+        isDivider: rWs.isDivider,
+        isArchived: rWs.isArchived,
       });
     } else {
       const nameChanged = rWs.name !== lWs.name;
@@ -57,8 +60,20 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
       const customValueChanged = rWs.customValue !== lWs.customValue;
       const colorChanged = rWs.color !== lWs.color;
       const iconChanged = rWs.icon !== lWs.icon;
+      const orderChanged = rWs.order !== lWs.order;
+      const isDividerChanged = rWs.isDivider !== lWs.isDivider;
+      const isArchivedChanged = rWs.isArchived !== lWs.isArchived;
 
-      if (nameChanged || customTypeChanged || customValueChanged || colorChanged || iconChanged) {
+      if (
+        nameChanged ||
+        customTypeChanged ||
+        customValueChanged ||
+        colorChanged ||
+        iconChanged ||
+        orderChanged ||
+        isDividerChanged ||
+        isArchivedChanged
+      ) {
         plan.workspacesToUpdate.push({
           id: rId,
           name: rWs.name,
@@ -66,6 +81,9 @@ export function reconcile(localState: SyncPayload, remoteState: SyncPayload): Re
           customValue: rWs.customValue,
           color: rWs.color,
           icon: rWs.icon,
+          order: rWs.order,
+          isDivider: rWs.isDivider,
+          isArchived: rWs.isArchived,
         });
       }
     }

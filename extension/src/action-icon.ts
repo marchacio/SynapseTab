@@ -104,7 +104,8 @@ export async function updateActionIcon(targetWorkspace?: StoredWorkspace): Promi
     if (!ws) {
       const activeWsId = await WorkspaceManager.getActiveWorkspaceId();
       const storedWorkspaces = await WorkspaceManager.getStoredWorkspaces();
-      ws = storedWorkspaces.find((w) => w.id === activeWsId) || storedWorkspaces[0];
+      ws = storedWorkspaces.find((w) => w.id === activeWsId && !w.isDivider && !w.isArchived) ||
+        storedWorkspaces.find((w) => !w.isDivider && !w.isArchived);
     }
 
     if (!ws) {

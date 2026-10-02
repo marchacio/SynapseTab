@@ -22,6 +22,9 @@ export interface Workspace {
   customValue?: string;
   color?: string;
   icon?: string;
+  order?: number;
+  isDivider?: boolean;
+  isArchived?: boolean;
 }
 
 export interface SyncPayload {
@@ -51,6 +54,9 @@ export interface ReconcilePlan {
     customValue?: string;
     color?: string;
     icon?: string;
+    order?: number;
+    isDivider?: boolean;
+    isArchived?: boolean;
   }>;
   workspacesToUpdate: Array<{
     id: string;
@@ -59,6 +65,9 @@ export interface ReconcilePlan {
     customValue?: string;
     color?: string;
     icon?: string;
+    order?: number;
+    isDivider?: boolean;
+    isArchived?: boolean;
   }>;
   workspacesToRemove: Array<{ id: string }>;
   activeWorkspaceId: string;
@@ -95,6 +104,7 @@ export interface BackupMetadata {
 
 export interface BackupRecord extends BackupMetadata {
   snapshot: SyncPayload;
+  backup?: any;
 }
 
 export interface BackupConfig {

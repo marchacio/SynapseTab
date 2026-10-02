@@ -7,6 +7,7 @@ import {
   BackupRecord,
   BackupConfig,
   BackupListResponse,
+  TabItem,
 } from './types.js';
 import {
   saveWorkspaceSnapshot,
@@ -21,6 +22,7 @@ import {
   setBackupConfig,
 } from './redis.js';
 import { config } from './config.js';
+import { exportToSynapseFormat, importFromSynapseFormat } from './backup-format.js';
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // Authentication preHandler hook for sync and backup routes
@@ -60,7 +62,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       redis: isRedisConnected ? 'connected' : 'disconnected',
       uptime: Math.floor(process.uptime()),
       timestamp: Math.floor(Date.now() / 1000),
-      version: '1.3.0',
+      version: '1.4.0',
     };
 
     if (!isRedisConnected) {
@@ -178,6 +180,11 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         0
       );
 
+      const pinnedTabs: TabItem[] = snapshot.workspaces.flatMap((w) =>
+        (w.tabs || []).filter((t) => t.pinned)
+      );
+      const backupJson = exportToSynapseFormat(snapshot.workspaces, pinnedTabs, '1.4.0');
+
       const record: BackupRecord = {
         id: backupId,
         timestamp: Date.now(),
@@ -186,6 +193,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         tabs_count: totalTabs,
         client_id: snapshot.client_id,
         snapshot,
+        backup: backupJson,
       };
 
       await saveBackup(userId, record, userConfig.retentionCopies);
@@ -216,6 +224,38 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     }
   );
 
+  // GET /api/v1/backups/:id/download - Downloads the backup JSON file in native SynapseTab format
+  fastify.get<{ Params: { id: string } }>(
+    '/api/v1/backups/:id/download',
+    {
+      preHandler: [authenticateBearer],
+    },
+    async (request, reply) => {
+      const userId = (request.headers['x-user-id'] as string) || config.defaultUserId;
+      const { id } = request.params;
+      const backup = await getBackup(userId, id);
+
+      if (!backup) {
+        return reply.status(404).send({
+          error: 'Not Found',
+          message: `Backup ${id} not found`,
+        });
+      }
+
+      const backupData =
+        backup.backup ||
+        exportToSynapseFormat(
+          backup.snapshot.workspaces,
+          backup.snapshot.workspaces.flatMap((w) => (w.tabs || []).filter((t) => t.pinned)),
+          '1.4.0'
+        );
+
+      reply.header('Content-Type', 'application/json; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="synapsetab-backup-${id}.json"`);
+      return reply.status(200).send(backupData);
+    }
+  );
+
   // POST /api/v1/backups/:id/restore - Restores backup snapshot to the active workspace state
   fastify.post<{ Params: { id: string } }>(
     '/api/v1/backups/:id/restore',
@@ -234,8 +274,20 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         });
       }
 
+      let restoredWorkspaces = backup.snapshot.workspaces;
+      if (backup.backup) {
+        try {
+          const importResult = importFromSynapseFormat(backup.backup);
+          restoredWorkspaces = importResult.workspaces;
+        } catch (e) {
+          console.warn('[Restore] Failed to parse backup.backup with importFromSynapseFormat, falling back to snapshot:', e);
+          restoredWorkspaces = backup.snapshot.workspaces;
+        }
+      }
+
       const restoredPayload: SyncPayload = {
         ...backup.snapshot,
+        workspaces: restoredWorkspaces,
         updated_at: Math.floor(Date.now() / 1000),
       };
 
@@ -245,6 +297,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         status: 'ok',
         message: `Backup ${id} restored successfully`,
         restored_snapshot: restoredPayload,
+        backup: backup.backup,
       });
     }
   );

@@ -11,6 +11,9 @@ export interface StoredWorkspace {
   customValue?: string;
   color?: string;
   icon?: string;
+  order?: number;
+  isDivider?: boolean;
+  isArchived?: boolean;
 }
 
 /**
@@ -113,9 +116,16 @@ export class WorkspaceManager {
   static async getStoredWorkspaces(): Promise<StoredWorkspace[]> {
     const data = await browser.storage.local.get(['workspaces', 'active_workspace_id']);
     if (Array.isArray(data.workspaces) && data.workspaces.length > 0) {
-      return data.workspaces;
+      const list = [...data.workspaces];
+      list.sort((a, b) => {
+        if (typeof a.order === 'number' && typeof b.order === 'number') {
+          return a.order - b.order;
+        }
+        return 0;
+      });
+      return list;
     }
-    return [{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME }];
+    return [{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, order: 0 }];
   }
 
   /**
@@ -127,10 +137,20 @@ export class WorkspaceManager {
 
   /**
    * Gets the currently active workspace ID from storage.
+   * Auto-falls back if stored active ID points to a divider or archived workspace.
    */
   static async getActiveWorkspaceId(): Promise<string> {
-    const data = await browser.storage.local.get('active_workspace_id');
-    return typeof data.active_workspace_id === 'string' ? data.active_workspace_id : DEFAULT_WORKSPACE_ID;
+    const data = await browser.storage.local.get(['active_workspace_id', 'workspaces']);
+    const stored = Array.isArray(data.workspaces) ? (data.workspaces as StoredWorkspace[]) : [];
+    const validWorkspaces = stored.filter((w) => !w.isDivider && !w.isArchived);
+
+    let activeId = typeof data.active_workspace_id === 'string' ? data.active_workspace_id : DEFAULT_WORKSPACE_ID;
+
+    if (validWorkspaces.length > 0 && !validWorkspaces.some((w) => w.id === activeId)) {
+      activeId = validWorkspaces[0].id;
+      await browser.storage.local.set({ active_workspace_id: activeId });
+    }
+    return activeId;
   }
 
   /**
@@ -228,6 +248,9 @@ export class WorkspaceManager {
         customValue: stored?.customValue,
         color: stored?.color,
         icon: stored?.icon,
+        order: stored?.order,
+        isDivider: stored?.isDivider,
+        isArchived: stored?.isArchived,
         tabs: wsTabs,
       });
     }
@@ -249,6 +272,13 @@ export class WorkspaceManager {
    */
   static async switchToWorkspace(targetWorkspaceId: string): Promise<void> {
     const currentActiveWsId = await this.getActiveWorkspaceId();
+
+    const storedWorkspaces = await this.getStoredWorkspaces();
+    const targetWs = storedWorkspaces.find((w) => w.id === targetWorkspaceId);
+    if (targetWs && (targetWs.isDivider || targetWs.isArchived)) {
+      // Cannot switch to a divider or archived workspace
+      return;
+    }
 
     if (currentActiveWsId === targetWorkspaceId) {
       return;
@@ -338,6 +368,9 @@ export class WorkspaceManager {
           customValue: ws.customValue,
           color: ws.color,
           icon: ws.icon,
+          order: ws.order,
+          isDivider: ws.isDivider,
+          isArchived: ws.isArchived,
         });
       }
     }
@@ -353,6 +386,9 @@ export class WorkspaceManager {
             customValue: ws.customValue,
             color: ws.color,
             icon: ws.icon,
+            order: ws.order !== undefined ? ws.order : updatedWorkspaces[targetIndex].order,
+            isDivider: ws.isDivider !== undefined ? ws.isDivider : updatedWorkspaces[targetIndex].isDivider,
+            isArchived: ws.isArchived !== undefined ? ws.isArchived : updatedWorkspaces[targetIndex].isArchived,
           };
         }
       }
@@ -361,6 +397,13 @@ export class WorkspaceManager {
     for (const ws of plan.workspacesToRemove) {
       updatedWorkspaces = updatedWorkspaces.filter((w) => w.id !== ws.id);
     }
+
+    updatedWorkspaces.sort((a, b) => {
+      if (typeof a.order === 'number' && typeof b.order === 'number') {
+        return a.order - b.order;
+      }
+      return 0;
+    });
 
     await this.saveStoredWorkspaces(updatedWorkspaces);
 
@@ -850,13 +893,16 @@ export class WorkspaceManager {
 
       // 7. Save stored workspaces and active workspace ID
       await this.saveStoredWorkspaces(
-        importedWorkspaces.map((w) => ({
+        importedWorkspaces.map((w, idx) => ({
           id: w.id,
           name: w.name,
           customType: w.customType,
           customValue: w.customValue,
           color: w.color,
           icon: w.icon,
+          order: typeof w.order === 'number' ? w.order : idx,
+          isDivider: w.isDivider,
+          isArchived: w.isArchived,
         }))
       );
       await this.setActiveWorkspaceId(targetActiveWs);
@@ -909,6 +955,9 @@ export class WorkspaceManager {
           customValue: ws.customValue,
           color: ws.color,
           icon: ws.icon,
+          order: typeof ws.order === 'number' ? ws.order : newWorkspacesToStore.length,
+          isDivider: ws.isDivider,
+          isArchived: ws.isArchived,
         });
 
         for (const tab of ws.tabs) {

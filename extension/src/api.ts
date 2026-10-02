@@ -288,7 +288,7 @@ export class SynapseApiClient {
   static async restoreBackup(
     settings: SynapseSettings,
     backupId: string
-  ): Promise<{ status: string; message: string; restored_snapshot: SyncPayload }> {
+  ): Promise<{ status: string; message: string; restored_snapshot: SyncPayload; backup?: any }> {
     const userId = settings.userId || 'default';
 
     const response = await this.fetchWithAutoHeal(
@@ -312,7 +312,37 @@ export class SynapseApiClient {
       status: string;
       message: string;
       restored_snapshot: SyncPayload;
+      backup?: any;
     };
+  }
+
+  /**
+   * Downloads the backup file in native SynapseTab JSON format from the server.
+   */
+  static async downloadBackup(
+    settings: SynapseSettings,
+    backupId: string
+  ): Promise<any> {
+    const userId = settings.userId || 'default';
+
+    const response = await this.fetchWithAutoHeal(
+      settings,
+      `/api/v1/backups/${encodeURIComponent(backupId)}/download`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${settings.syncSecret}`,
+          'X-User-Id': userId,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to download backup (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
   }
 
   /**

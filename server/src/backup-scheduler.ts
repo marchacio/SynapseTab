@@ -5,7 +5,8 @@ import {
   listBackups,
   saveBackup,
 } from './redis.js';
-import { BackupRecord, BackupFrequency } from './types.js';
+import { BackupRecord, BackupFrequency, TabItem } from './types.js';
+import { exportToSynapseFormat } from './backup-format.js';
 
 export const INTERVAL_DURATIONS_MS: Record<Exclude<BackupFrequency, 'disabled'>, number> = {
   hourly: 60 * 60 * 1000,
@@ -81,6 +82,11 @@ export class BackupScheduler {
             0
           );
 
+          const pinnedTabs: TabItem[] = snapshot.workspaces.flatMap((w) =>
+            (w.tabs || []).filter((t) => t.pinned)
+          );
+          const backupJson = exportToSynapseFormat(snapshot.workspaces, pinnedTabs, '1.4.0');
+
           const record: BackupRecord = {
             id: backupId,
             timestamp: Date.now(),
@@ -89,6 +95,7 @@ export class BackupScheduler {
             tabs_count: totalTabs,
             client_id: snapshot.client_id,
             snapshot,
+            backup: backupJson,
           };
 
           await saveBackup(userId, record, backupConfig.retentionCopies);

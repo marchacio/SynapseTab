@@ -22,6 +22,9 @@ export const WorkspaceSchema = Type.Object({
   customValue: Type.Optional(Type.String()),
   color: Type.Optional(Type.String()),
   icon: Type.Optional(Type.String()),
+  order: Type.Optional(Type.Integer()),
+  isDivider: Type.Optional(Type.Boolean()),
+  isArchived: Type.Optional(Type.Boolean()),
 }, { additionalProperties: false });
 
 export const SyncPayloadSchema = Type.Object({

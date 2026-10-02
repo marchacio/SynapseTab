@@ -70,7 +70,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const data = response.json();
       expect(data.status).toBe('healthy');
       expect(data.redis).toBe('connected');
-      expect(data.version).toBe('1.3.0');
+      expect(data.version).toBe('1.4.0');
       expect(typeof data.uptime).toBe('number');
     });
   });
@@ -250,6 +250,65 @@ describe('SynapseTab Server Integration Tests', () => {
       const retrieved = getRes.json();
       expect(retrieved.version).toBe(42);
       expect(retrieved).toEqual(payloadWithVersion);
+    });
+
+    it('successfully persists and retrieves workspaces with order, isDivider, and isArchived', async () => {
+      const payloadWithDividers: SyncPayload = {
+        client_id: 'laptop-order-01',
+        updated_at: 1773329500,
+        active_workspace_id: 'ws-main',
+        workspaces: [
+          {
+            id: 'ws-main',
+            name: 'Main Workspace',
+            order: 0,
+            isDivider: false,
+            isArchived: false,
+            tabs: [],
+          },
+          {
+            id: 'div-sep-1',
+            name: 'Divider Line',
+            order: 1,
+            isDivider: true,
+            tabs: [],
+          },
+          {
+            id: 'ws-old-proj',
+            name: 'Old Project',
+            order: 2,
+            isDivider: false,
+            isArchived: true,
+            tabs: [],
+          },
+        ],
+      };
+
+      const postRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+        },
+        payload: payloadWithDividers,
+      });
+
+      expect(postRes.statusCode).toBe(200);
+
+      const getRes = await app.inject({
+        method: 'GET',
+        url: '/api/v1/sync',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+        },
+      });
+
+      expect(getRes.statusCode).toBe(200);
+      const retrieved = getRes.json();
+      expect(retrieved.workspaces).toHaveLength(3);
+      expect(retrieved.workspaces[1].isDivider).toBe(true);
+      expect(retrieved.workspaces[2].isArchived).toBe(true);
+      expect(retrieved.workspaces[0].order).toBe(0);
     });
 
     it('isolates state per user ID header', async () => {
@@ -452,6 +511,41 @@ describe('SynapseTab Server Integration Tests', () => {
       const detail = getRes.json();
       expect(detail.id).toBe(backupId);
       expect(detail.snapshot.workspaces.length).toBe(2);
+      expect(detail.backup).toBeDefined();
+      expect(detail.backup.format).toBe('synapsetab-backup');
+      expect(detail.backup.version).toBe('1.4.0');
+      expect(detail.backup.workspaces.length).toBe(2);
+    });
+
+    it('GET /api/v1/backups/:id/download returns attachment JSON with SynapseTab format', async () => {
+      // 1. Create backup
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/backups',
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': 'test-user',
+        },
+      });
+      const backupId = createRes.json().id;
+
+      // 2. Download JSON
+      const downloadRes = await app.inject({
+        method: 'GET',
+        url: `/api/v1/backups/${backupId}/download`,
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': 'test-user',
+        },
+      });
+
+      expect(downloadRes.statusCode).toBe(200);
+      expect(downloadRes.headers['content-type']).toContain('application/json');
+      expect(downloadRes.headers['content-disposition']).toBe(`attachment; filename="synapsetab-backup-${backupId}.json"`);
+      const body = downloadRes.json();
+      expect(body.format).toBe('synapsetab-backup');
+      expect(body.version).toBe('1.4.0');
+      expect(body.workspaces.length).toBe(2);
     });
 
     it('GET /api/v1/backups/:id returns 404 for non-existent backup', async () => {
@@ -691,6 +785,21 @@ describe('SynapseTab Server Integration Tests', () => {
       expect(list.length).toBe(1);
       expect(list[0].reason).toBe('scheduled');
       expect(list[0].workspaces_count).toBe(2);
+
+      // Verify scheduled backup record contains native SynapseTab format
+      const detailRes = await app.inject({
+        method: 'GET',
+        url: `/api/v1/backups/${list[0].id}`,
+        headers: {
+          Authorization: `Bearer ${validSecret}`,
+          'X-User-Id': 'scheduler-user',
+        },
+      });
+      const detail = detailRes.json();
+      expect(detail.backup).toBeDefined();
+      expect(detail.backup.format).toBe('synapsetab-backup');
+      expect(detail.backup.version).toBe('1.4.0');
+      expect(detail.backup.workspaces.length).toBe(2);
 
       // Running immediately again without time passing should NOT create another backup
       const secondCheckCount = await scheduler.runPeriodicCheck();
