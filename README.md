@@ -16,15 +16,16 @@
 </p>
 
 
-> Note: This project is currently under development. You’re welcome to try it out, but keep in mind it is a work in progress. I’m planning to polish it further, add more features and improve it, and of course, bug fixes and suggestions are always welcome. Feel free to open an Issue or a Pull Request – thank you very much for your help!
-
-## 1. Project goals
+> Note: This project is currently under development. You’re welcome to try it out, but keep in mind it is a work in progress. Bug fixes and suggestions are always welcome, feel free to open an Issue or a Pull Request – thank you very much!
 
 SynapseTab is an Open-Source self-hosted workspaces and tabs synchronization system engineered for multi-workstation setups. It is a zero-configuration system that works automatically in the background and requires no user interaction.
 
-TODO add gif showing a cool demo of SynapseTab
+<p align="center">
+  <img src="images/image1.png" alt="SynapseTab popup" width="45%"> 
+  <img src="images/image2.png" alt="SynapseTab settings" width="45%">
+</p>
 
-## 2. Installation & Quickstart
+## Installation & Quickstart
 
 SynapseTab consists of two components:
 1. **Backend Server:** A lightweight Fastify + Redis service storing your workspace snapshots and automatic backups.
@@ -72,14 +73,14 @@ docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d --build s
 
 Your current tabs and workspaces will immediately synchronize. 
 
-## 3. Local Development
+## Local Development
 
 See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for detailed information about local development and testing.
 
-## 4. License
+## License
 
 Released under the **MIT License**. 100% Free and Open-Source Software.
 
-## 5. AI usage
+## AI usage
 
 The entire project was developed using the Antigravity agent-based IDE (as you can see from the GEMINI.md file), in accordance with all best practices for software development and the use of AI.
