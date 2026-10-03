@@ -3,7 +3,7 @@ import { reconcile } from './diff.js';
 import { WorkspaceManager, StoredWorkspace, DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from './workspaces.js';
 import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
 import { exportToSynapseFormat, importFromSynapseFormat } from './backup-format.js';
-import { initContextMenus } from './menus.js';
+import { initContextMenus, setupContextMenus } from './menus.js';
 import { updateActionIcon } from './action-icon.js';
 import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace, DebugLogLevel, DebugLogEntry, DebugDiagnostics } from './types.js';
@@ -1354,7 +1354,11 @@ async function init(): Promise<void> {
   }
 
   // Initialize and assign UUIDs and workspaces for all existing tabs
-  await WorkspaceManager.initializeExistingTabs();
+  try {
+    await WorkspaceManager.initializeExistingTabs();
+  } catch (err: any) {
+    console.warn('[SynapseTab] Failed to initialize existing tabs on startup:', err);
+  }
 
   // Clear any existing alarms so background polling never runs during usage
   if (typeof browser.alarms !== 'undefined' && browser.alarms.clearAll) {
@@ -1442,9 +1446,6 @@ async function init(): Promise<void> {
   // Register tab listeners ONLY after initial pull has completed and settled
   setupTabListeners();
 
-  // Initialize Firefox tab context menus
-  initContextMenus(() => triggerPushSync());
-
   // Listen for storage changes to active workspace or workspaces to update action icon
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && (changes.active_workspace_id || changes.workspaces)) {
@@ -1454,6 +1455,21 @@ async function init(): Promise<void> {
 
   // Update browser toolbar icon for active workspace
   await updateActionIcon();
+}
+
+// Initialize Firefox tab context menus immediately at top-level on background load
+initContextMenus(() => triggerPushSync());
+
+// Listen for runtime install/update and browser startup to ensure context menus are freshly created
+if (typeof browser.runtime.onInstalled !== 'undefined' && browser.runtime.onInstalled.addListener) {
+  browser.runtime.onInstalled.addListener(() => {
+    setupContextMenus();
+  });
+}
+if (typeof browser.runtime.onStartup !== 'undefined' && browser.runtime.onStartup.addListener) {
+  browser.runtime.onStartup.addListener(() => {
+    setupContextMenus();
+  });
 }
 
 init();

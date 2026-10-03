@@ -308,7 +308,64 @@ describe('Menus Module Unit Tests', () => {
       expect(sessionValues.has('105:workspace_id')).toBe(false);
       expect(movedCalled).toBe(false);
     });
+
+    it('disables root menu for pinned tabs in onShown without hiding it', async () => {
+      const updatedMenus: any[] = [];
+      let onShownListener: any = null;
+
+      (globalThis as any).browser = {
+        storage: {
+          local: {
+            get: async () => ({ workspaces: [{ id: 'ws-dev', name: 'Dev' }], active_workspace_id: 'ws-dev' }),
+            set: async () => {},
+          },
+          onChanged: { addListener: () => {} },
+        },
+        sessions: {
+          getTabValue: async () => 'ws-main',
+        },
+        tabs: {
+          query: async () => [],
+        },
+        menus: {
+          removeAll: async () => {},
+          create: () => {},
+          update: async (id: string, props: any) => {
+            updatedMenus.push({ id, ...props });
+          },
+          refresh: () => {},
+          onClicked: { addListener: () => {} },
+          onShown: {
+            addListener: (fn: any) => {
+              onShownListener = fn;
+            },
+          },
+          onHidden: { addListener: () => {} },
+        },
+      };
+
+      const { initContextMenus } = await import('../src/menus.js');
+      initContextMenus();
+
+      // Trigger onShown for a pinned tab
+      await onShownListener({ contexts: ['tab'] }, { id: 201, pinned: true });
+      expect(updatedMenus.length).toBeGreaterThan(0);
+      const lastUpdate = updatedMenus[updatedMenus.length - 1];
+      expect(lastUpdate.id).toBe('synapse-tab-move-root');
+      expect(lastUpdate.visible).toBe(true);
+      expect(lastUpdate.enabled).toBe(false);
+      expect(lastUpdate.title).toBe('Cannot move pinned tab');
+
+      // Trigger onShown for an unpinned tab
+      updatedMenus.length = 0;
+      await onShownListener({ contexts: ['tab'] }, { id: 202, pinned: false });
+      const rootUpdate = updatedMenus.find((u) => u.id === 'synapse-tab-move-root');
+      expect(rootUpdate).toBeDefined();
+      expect(rootUpdate.visible).toBe(true);
+      expect(rootUpdate.enabled).toBe(true);
+    });
   });
 });
+
 
 

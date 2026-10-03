@@ -174,10 +174,15 @@ export async function setupContextMenus(): Promise<void> {
       id: ROOT_MENU_ID,
       title: 'Move tab to another workspace',
       contexts: ['tab'],
+      visible: true,
+      enabled: true,
     });
 
+    const seenIds = new Set<string>();
     for (const ws of storedWorkspaces) {
       if (ws.isDivider || ws.isArchived) continue;
+      if (seenIds.has(ws.id)) continue;
+      seenIds.add(ws.id);
       const isCurrent = ws.id === activeWsId;
       browser.menus.create({
         id: `${WORKSPACE_MENU_PREFIX}${ws.id}`,
@@ -262,7 +267,7 @@ export function initContextMenus(onTabMoved?: () => void): void {
 
   let currentMenuInstance = 0;
 
-  // 2. Menu shown - dynamically update label, indicate current workspace, or hide if tab is pinned
+  // 2. Menu shown - dynamically update label, indicate current workspace, or disable if tab is pinned
   browser.menus.onShown.addListener(async (info, tab) => {
     const instanceId = ++currentMenuInstance;
     if (!info.contexts || !info.contexts.includes('tab')) {
@@ -274,10 +279,14 @@ export function initContextMenus(onTabMoved?: () => void): void {
       return;
     }
 
-    // Pinned tabs must not show the "Move tab to another workspace" menu option
+    // Pinned tabs reside in global browser context and cannot be moved to a workspace
     if (targetTab.pinned) {
       try {
-        await browser.menus.update(ROOT_MENU_ID, { visible: false });
+        await browser.menus.update(ROOT_MENU_ID, {
+          visible: true,
+          enabled: false,
+          title: 'Cannot move pinned tab',
+        });
         if (instanceId === currentMenuInstance) {
           browser.menus.refresh();
         }
@@ -296,7 +305,11 @@ export function initContextMenus(onTabMoved?: () => void): void {
           if (highlighted.length > 1 && highlighted.some((t) => t.id === targetTab.id)) {
             const unpinnedMovable = highlighted.filter((t) => !t.pinned);
             if (unpinnedMovable.length === 0) {
-              await browser.menus.update(ROOT_MENU_ID, { visible: false });
+              await browser.menus.update(ROOT_MENU_ID, {
+                visible: true,
+                enabled: false,
+                title: 'Cannot move pinned tabs',
+              });
               if (instanceId === currentMenuInstance) {
                 browser.menus.refresh();
               }
@@ -322,6 +335,7 @@ export function initContextMenus(onTabMoved?: () => void): void {
       const updatePromises: Promise<any>[] = [
         browser.menus.update(ROOT_MENU_ID, {
           visible: true,
+          enabled: true,
           title: rootTitle,
         }),
       ];
@@ -353,7 +367,11 @@ export function initContextMenus(onTabMoved?: () => void): void {
   browser.menus.onHidden?.addListener(async () => {
     currentMenuInstance++;
     try {
-      await browser.menus.update(ROOT_MENU_ID, { visible: true });
+      await browser.menus.update(ROOT_MENU_ID, {
+        visible: true,
+        enabled: true,
+        title: 'Move tab to another workspace',
+      });
     } catch {
       // Ignored
     }
