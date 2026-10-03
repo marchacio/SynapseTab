@@ -287,7 +287,20 @@ export class WorkspaceManager {
     // Update active workspace ID in storage
     await this.setActiveWorkspaceId(targetWorkspaceId);
 
-    const tabs = await browser.tabs.query({ currentWindow: true });
+    let tabs: browser.tabs.Tab[] = [];
+    try {
+      tabs = await browser.tabs.query({ currentWindow: true });
+      if (tabs.length === 0) {
+        tabs = await browser.tabs.query({ lastFocusedWindow: true });
+      }
+      if (tabs.length === 0) {
+        tabs = await browser.tabs.query({});
+      }
+    } catch {
+      try {
+        tabs = await browser.tabs.query({});
+      } catch {}
+    }
     const targetTabIds: number[] = [];
     const hideTabIds: number[] = [];
 
@@ -319,10 +332,14 @@ export class WorkspaceManager {
     } else {
       // If target workspace has no tabs, create one before hiding other tabs
       try {
-        const newTab = await browser.tabs.create({
+        const createProps: browser.tabs._CreateCreateProperties = {
           active: true,
           url: 'about:blank',
-        });
+        };
+        if (tabs.length > 0 && tabs[0].windowId !== undefined) {
+          createProps.windowId = tabs[0].windowId;
+        }
+        const newTab = await browser.tabs.create(createProps);
         if (newTab.id !== undefined) {
           await this.getOrAssignTabUuid(newTab.id);
           await this.setTabWorkspaceId(newTab.id, targetWorkspaceId);
@@ -334,7 +351,20 @@ export class WorkspaceManager {
     }
 
     // 2. Query fresh tab list in window to verify active state and safely hide inactive tabs
-    const freshTabs = await browser.tabs.query({ currentWindow: true });
+    let freshTabs: browser.tabs.Tab[] = [];
+    try {
+      const windowId = tabs.length > 0 ? tabs[0].windowId : undefined;
+      freshTabs = windowId !== undefined
+        ? await browser.tabs.query({ windowId })
+        : await browser.tabs.query({ currentWindow: true });
+      if (freshTabs.length === 0) {
+        freshTabs = await browser.tabs.query({});
+      }
+    } catch {
+      try {
+        freshTabs = await browser.tabs.query({});
+      } catch {}
+    }
     const canHideIds = freshTabs
       .filter((t) => t.id !== undefined && hideTabIds.includes(t.id) && !t.pinned && !t.active)
       .map((t) => t.id as number);
@@ -645,31 +675,64 @@ export class WorkspaceManager {
    */
   static async moveTabsToWorkspace(tabIds: number[], targetWorkspaceId: string): Promise<void> {
     if (tabIds.length === 0) return;
-    const allTabs = await browser.tabs.query({ currentWindow: true });
 
-    // Filter out pinned tabs - pinned tabs reside in global session scope and cannot be hidden
-    const unpinnedTabIds = tabIds.filter((id) => {
-      const t = allTabs.find((tab) => tab.id === id);
-      return t && !t.pinned;
-    });
+    // Safely retrieve the tabs by ID rather than relying on fragile currentWindow queries
+    const tabs: browser.tabs.Tab[] = [];
+    for (const id of tabIds) {
+      try {
+        const tab = await browser.tabs.get(id);
+        if (tab && !tab.pinned) {
+          tabs.push(tab);
+        }
+      } catch {
+        // Tab may have closed or no longer exist
+      }
+    }
 
-    if (unpinnedTabIds.length === 0) return;
+    if (tabs.length === 0) return;
+
+    const windowId = tabs[0].windowId;
     const activeWs = await this.getActiveWorkspaceId();
 
-    for (const tabId of unpinnedTabIds) {
-      await this.setTabWorkspaceId(tabId, targetWorkspaceId);
+    for (const tab of tabs) {
+      if (tab.id !== undefined) {
+        await this.setTabWorkspaceId(tab.id, targetWorkspaceId);
+      }
+    }
+
+    // Query all tabs in the window where these tab(s) reside
+    let windowTabs: browser.tabs.Tab[] = [];
+    try {
+      windowTabs = windowId !== undefined
+        ? await browser.tabs.query({ windowId })
+        : await browser.tabs.query({ currentWindow: true });
+      if (windowTabs.length === 0) {
+        windowTabs = await browser.tabs.query({});
+      }
+    } catch {
+      try {
+        windowTabs = await browser.tabs.query({});
+      } catch {}
     }
 
     if (targetWorkspaceId !== activeWs) {
-      const targetSet = new Set(unpinnedTabIds);
-      const activeTabToMove = allTabs.find((t) => t.id !== undefined && targetSet.has(t.id) && t.active);
+      const targetSet = new Set(tabs.map((t) => t.id).filter((id): id is number => id !== undefined));
+      const activeTabToMove = windowTabs.find((t) => t.id !== undefined && targetSet.has(t.id) && t.active);
 
       if (activeTabToMove) {
-        const remainingTab = allTabs.find((t) => t.id !== undefined && !targetSet.has(t.id) && !t.hidden);
+        // Find another tab in the window that is not in targetSet and not hidden
+        const remainingTab = windowTabs.find((t) => t.id !== undefined && !targetSet.has(t.id) && !t.hidden);
         if (remainingTab && remainingTab.id !== undefined) {
           await browser.tabs.update(remainingTab.id, { active: true });
         } else {
-          const newTab = await browser.tabs.create({ active: true, url: 'about:blank' });
+          const createProps: browser.tabs._CreateCreateProperties = {
+            active: true,
+            url: 'about:blank',
+          };
+          if (windowId !== undefined) {
+            createProps.windowId = windowId;
+          }
+          const newTab = await browser.tabs.create(createProps);
           if (newTab.id !== undefined) {
             await this.getOrAssignTabUuid(newTab.id);
             await this.setTabWorkspaceId(newTab.id, activeWs);
@@ -677,7 +740,7 @@ export class WorkspaceManager {
         }
       }
 
-      const tabsToHide = unpinnedTabIds;
+      const tabsToHide = tabs.map((t) => t.id).filter((id): id is number => id !== undefined);
 
       if (tabsToHide.length > 0) {
         try {
@@ -694,10 +757,9 @@ export class WorkspaceManager {
       }
     } else {
       // If moving into the currently active workspace, ensure tabs are visible
-      const tabsToShow = unpinnedTabIds.filter((id) => {
-        const t = allTabs.find((tab) => tab.id === id);
-        return t && t.hidden;
-      });
+      const tabsToShow = tabs
+        .filter((t) => t.hidden && t.id !== undefined)
+        .map((t) => t.id as number);
       if (tabsToShow.length > 0) {
         try {
           await browser.tabs.show(tabsToShow);

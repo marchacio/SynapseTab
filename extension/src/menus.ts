@@ -168,6 +168,7 @@ export async function setupContextMenus(): Promise<void> {
   try {
     await browser.menus.removeAll();
     const storedWorkspaces = await WorkspaceManager.getStoredWorkspaces();
+    const activeWsId = await WorkspaceManager.getActiveWorkspaceId();
 
     browser.menus.create({
       id: ROOT_MENU_ID,
@@ -177,10 +178,11 @@ export async function setupContextMenus(): Promise<void> {
 
     for (const ws of storedWorkspaces) {
       if (ws.isDivider || ws.isArchived) continue;
+      const isCurrent = ws.id === activeWsId;
       browser.menus.create({
         id: `${WORKSPACE_MENU_PREFIX}${ws.id}`,
         parentId: ROOT_MENU_ID,
-        title: formatWorkspaceMenuTitle(ws),
+        title: formatWorkspaceMenuTitle(ws, isCurrent),
         contexts: ['tab'],
       });
     }
@@ -213,43 +215,56 @@ export function initContextMenus(onTabMoved?: () => void): void {
     let tabsToMove: number[] = [];
 
     if (tab && tab.id !== undefined) {
-      if (tab.highlighted) {
-        const highlightedTabs = await browser.tabs.query({ highlighted: true, currentWindow: true });
-        if (highlightedTabs.some((t) => t.id === tab.id)) {
-          tabsToMove = highlightedTabs
-            .filter((t) => !t.pinned && t.id !== undefined)
-            .map((t) => t.id as number);
-        } else {
+      if (tab.highlighted && tab.windowId !== undefined) {
+        try {
+          const highlightedTabs = await browser.tabs.query({ highlighted: true, windowId: tab.windowId });
+          if (highlightedTabs.some((t) => t.id === tab.id)) {
+            tabsToMove = highlightedTabs
+              .filter((t) => !t.pinned && t.id !== undefined)
+              .map((t) => t.id as number);
+          } else {
+            tabsToMove = [tab.id];
+          }
+        } catch {
           tabsToMove = [tab.id];
         }
       } else {
         tabsToMove = [tab.id];
       }
     } else {
-      const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
-      if (activeTabs.length > 0 && activeTabs[0].id !== undefined && !activeTabs[0].pinned) {
-        tabsToMove = [activeTabs[0].id];
+      // Fallback if tab object wasn't directly passed by event: query active tab in last-focused window
+      try {
+        const activeTabs = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+        if (activeTabs.length > 0 && activeTabs[0].id !== undefined && !activeTabs[0].pinned) {
+          tabsToMove = [activeTabs[0].id];
+        }
+      } catch {
+        try {
+          const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
+          if (activeTabs.length > 0 && activeTabs[0].id !== undefined && !activeTabs[0].pinned) {
+            tabsToMove = [activeTabs[0].id];
+          }
+        } catch {}
       }
     }
 
     if (tabsToMove.length > 0) {
-      const allTabs = await browser.tabs.query({ currentWindow: true });
-      const validTabs = tabsToMove.filter((id) => {
-        const t = allTabs.find((tab) => tab.id === id);
-        return t && !t.pinned;
-      });
-
-      if (validTabs.length > 0) {
-        await WorkspaceManager.moveTabsToWorkspace(validTabs, targetWsId);
+      try {
+        await WorkspaceManager.moveTabsToWorkspace(tabsToMove, targetWsId);
         if (onTabMoved) {
           onTabMoved();
         }
+      } catch (err) {
+        console.error('[SynapseTab Menus] Failed to move tabs to workspace:', err);
       }
     }
   });
 
+  let currentMenuInstance = 0;
+
   // 2. Menu shown - dynamically update label, indicate current workspace, or hide if tab is pinned
   browser.menus.onShown.addListener(async (info, tab) => {
+    const instanceId = ++currentMenuInstance;
     if (!info.contexts || !info.contexts.includes('tab')) {
       return;
     }
@@ -263,7 +278,9 @@ export function initContextMenus(onTabMoved?: () => void): void {
     if (targetTab.pinned) {
       try {
         await browser.menus.update(ROOT_MENU_ID, { visible: false });
-        browser.menus.refresh();
+        if (instanceId === currentMenuInstance) {
+          browser.menus.refresh();
+        }
       } catch {
         // Ignored
       }
@@ -273,42 +290,60 @@ export function initContextMenus(onTabMoved?: () => void): void {
     try {
       let isMulti = false;
       let count = 1;
-      if (targetTab.highlighted) {
-        const highlighted = await browser.tabs.query({ highlighted: true, currentWindow: true });
-        if (highlighted.length > 1 && highlighted.some((t) => t.id === targetTab.id)) {
-          const unpinnedMovable = highlighted.filter((t) => !t.pinned);
-          if (unpinnedMovable.length === 0) {
-            await browser.menus.update(ROOT_MENU_ID, { visible: false });
-            browser.menus.refresh();
-            return;
+      if (targetTab.highlighted && targetTab.windowId !== undefined) {
+        try {
+          const highlighted = await browser.tabs.query({ highlighted: true, windowId: targetTab.windowId });
+          if (highlighted.length > 1 && highlighted.some((t) => t.id === targetTab.id)) {
+            const unpinnedMovable = highlighted.filter((t) => !t.pinned);
+            if (unpinnedMovable.length === 0) {
+              await browser.menus.update(ROOT_MENU_ID, { visible: false });
+              if (instanceId === currentMenuInstance) {
+                browser.menus.refresh();
+              }
+              return;
+            }
+            isMulti = unpinnedMovable.length > 1;
+            count = unpinnedMovable.length;
           }
-          isMulti = unpinnedMovable.length > 1;
-          count = unpinnedMovable.length;
+        } catch {
+          // Ignored
         }
       }
 
       const activeWsId = await WorkspaceManager.getActiveWorkspaceId();
       const currentWsId = await WorkspaceManager.getTabWorkspaceId(targetTab.id, activeWsId);
 
+      if (instanceId !== currentMenuInstance) return;
+
       const rootTitle = isMulti
         ? `Move ${count} tabs to another workspace`
         : 'Move tab to another workspace';
 
-      await browser.menus.update(ROOT_MENU_ID, {
-        visible: true,
-        title: rootTitle,
-      });
+      const updatePromises: Promise<any>[] = [
+        browser.menus.update(ROOT_MENU_ID, {
+          visible: true,
+          title: rootTitle,
+        }),
+      ];
 
       const storedWorkspaces = await WorkspaceManager.getStoredWorkspaces();
+      if (instanceId !== currentMenuInstance) return;
+
       for (const ws of storedWorkspaces) {
+        if (ws.isDivider || ws.isArchived) continue;
         const wsMenuId = `${WORKSPACE_MENU_PREFIX}${ws.id}`;
         const isCurrent = ws.id === currentWsId;
-        await browser.menus.update(wsMenuId, {
-          title: formatWorkspaceMenuTitle(ws, isCurrent),
-        });
+        updatePromises.push(
+          browser.menus.update(wsMenuId, {
+            title: formatWorkspaceMenuTitle(ws, isCurrent),
+          })
+        );
       }
 
-      browser.menus.refresh();
+      await Promise.all(updatePromises);
+      if (instanceId === currentMenuInstance) {
+        browser.menus.refresh();
+      }
     } catch {
       // Menu might have closed before async operations finished
     }
@@ -316,6 +351,7 @@ export function initContextMenus(onTabMoved?: () => void): void {
 
   // 3. Menu hidden - reset visibility state for next menu presentation
   browser.menus.onHidden?.addListener(async () => {
+    currentMenuInstance++;
     try {
       await browser.menus.update(ROOT_MENU_ID, { visible: true });
     } catch {
@@ -323,9 +359,9 @@ export function initContextMenus(onTabMoved?: () => void): void {
     }
   });
 
-  // 4. Rebuild context menus when stored workspaces change
+  // 4. Rebuild context menus when stored workspaces change or active workspace switches
   browser.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes.workspaces) {
+    if (areaName === 'local' && (changes.workspaces || changes.active_workspace_id)) {
       setupContextMenus();
     }
   });

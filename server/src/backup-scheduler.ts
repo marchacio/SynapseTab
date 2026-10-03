@@ -85,7 +85,7 @@ export class BackupScheduler {
           const pinnedTabs: TabItem[] = snapshot.workspaces.flatMap((w) =>
             (w.tabs || []).filter((t) => t.pinned)
           );
-          const backupJson = exportToSynapseFormat(snapshot.workspaces, pinnedTabs, '1.4.1');
+          const backupJson = exportToSynapseFormat(snapshot.workspaces, pinnedTabs, '1.4.2');
 
           const record: BackupRecord = {
             id: backupId,

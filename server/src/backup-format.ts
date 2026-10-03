@@ -98,7 +98,7 @@ export function detectBackupFormat(raw: any): BackupFormatType {
 export function exportToSynapseFormat(
   workspaces: Workspace[],
   pinnedTabs: TabItem[] = [],
-  appVersion: string = '1.4.1'
+  appVersion: string = '1.4.2'
 ): SynapseTabBackupData {
   const exportedWorkspaces: SynapseTabBackupWorkspace[] = workspaces.map((ws, wsIdx) => ({
     id: ws.id,

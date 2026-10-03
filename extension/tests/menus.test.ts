@@ -150,5 +150,165 @@ describe('Menus Module Unit Tests', () => {
       expect(isTabMovableToWorkspace(undefined)).toBe(false);
     });
   });
+
+  describe('Context Menu Click & Tab Moving', () => {
+    it('successfully moves tab to target workspace when menu item is clicked', async () => {
+      const storedWorkspaces: StoredWorkspace[] = [
+        { id: 'ws-main', name: 'Main' },
+        { id: 'ws-dev', name: 'Dev' },
+      ];
+
+      const tabs: any[] = [
+        { id: 101, windowId: 1, active: true, pinned: false, hidden: false },
+        { id: 102, windowId: 1, active: false, pinned: false, hidden: false },
+      ];
+
+      const sessionValues = new Map<string, string>();
+      const hiddenTabs = new Set<number>();
+      const createdMenuItems: any[] = [];
+      let onClickedListener: any = null;
+
+      (globalThis as any).browser = {
+        storage: {
+          local: {
+            get: async () => ({ workspaces: storedWorkspaces, active_workspace_id: 'ws-main' }),
+            set: async () => {},
+          },
+          onChanged: { addListener: () => {} },
+        },
+        sessions: {
+          getTabValue: async (tabId: number, key: string) => sessionValues.get(`${tabId}:${key}`),
+          setTabValue: async (tabId: number, key: string, value: string) => {
+            sessionValues.set(`${tabId}:${key}`, value);
+          },
+        },
+        tabs: {
+          get: async (id: number) => tabs.find((t) => t.id === id),
+          query: async (queryInfo: any) => {
+            return tabs.filter((t) => {
+              if (queryInfo.windowId !== undefined && t.windowId !== queryInfo.windowId) return false;
+              if (queryInfo.active !== undefined && t.active !== queryInfo.active) return false;
+              if (queryInfo.highlighted !== undefined && t.highlighted !== queryInfo.highlighted) return false;
+              return true;
+            });
+          },
+          update: async (tabId: number, updateInfo: any) => {
+            const target = tabs.find((t) => t.id === tabId);
+            if (target && updateInfo.active) {
+              tabs.forEach((t) => {
+                if (t.windowId === target.windowId) t.active = false;
+              });
+              target.active = true;
+            }
+            return target;
+          },
+          hide: async (ids: number | number[]) => {
+            const arr = Array.isArray(ids) ? ids : [ids];
+            arr.forEach((id) => hiddenTabs.add(id));
+            return arr;
+          },
+          show: async (ids: number | number[]) => {
+            const arr = Array.isArray(ids) ? ids : [ids];
+            arr.forEach((id) => hiddenTabs.delete(id));
+            return arr;
+          },
+          create: async (createProps: any) => {
+            const newTab = { id: 999, windowId: createProps.windowId || 1, active: true, pinned: false, hidden: false };
+            tabs.push(newTab);
+            return newTab;
+          },
+        },
+        menus: {
+          removeAll: async () => {
+            createdMenuItems.length = 0;
+          },
+          create: (item: any) => {
+            createdMenuItems.push(item);
+          },
+          update: async () => {},
+          refresh: () => {},
+          onClicked: {
+            addListener: (fn: any) => {
+              onClickedListener = fn;
+            },
+          },
+          onShown: { addListener: () => {} },
+          onHidden: { addListener: () => {} },
+        },
+      };
+
+      const { initContextMenus, setupContextMenus } = await import('../src/menus.js');
+      await setupContextMenus();
+
+      // Check that menu items were created with correct IDs
+      expect(createdMenuItems.some((m) => m.id === 'synapse-tab-move-root')).toBe(true);
+      expect(createdMenuItems.some((m) => m.id === 'synapse-move-to-ws-dev')).toBe(true);
+      const mainItem = createdMenuItems.find((m) => m.id === 'synapse-move-to-ws-main');
+      expect(mainItem?.title).toContain('(current)');
+
+      let movedCalled = false;
+      initContextMenus(() => {
+        movedCalled = true;
+      });
+
+      // Simulate clicking on the 'Dev' workspace for tab 101
+      await onClickedListener(
+        { menuItemId: 'synapse-move-to-ws-dev' },
+        { id: 101, windowId: 1, active: true, pinned: false }
+      );
+
+      // Tab 101 was active, so tab 102 should have been activated and tab 101 hidden
+      expect(sessionValues.get('101:workspace_id')).toBe('ws-dev');
+      expect(hiddenTabs.has(101)).toBe(true);
+      expect(tabs.find((t) => t.id === 102)?.active).toBe(true);
+      expect(movedCalled).toBe(true);
+    });
+
+    it('does not move pinned tabs', async () => {
+      const sessionValues = new Map<string, string>();
+      let onClickedListener: any = null;
+
+      (globalThis as any).browser = {
+        storage: {
+          local: {
+            get: async () => ({ workspaces: [{ id: 'ws-dev', name: 'Dev' }], active_workspace_id: 'ws-main' }),
+            set: async () => {},
+          },
+          onChanged: { addListener: () => {} },
+        },
+        sessions: {
+          setTabValue: async (tabId: number, key: string, value: string) => {
+            sessionValues.set(`${tabId}:${key}`, value);
+          },
+        },
+        menus: {
+          removeAll: async () => {},
+          create: () => {},
+          onClicked: {
+            addListener: (fn: any) => {
+              onClickedListener = fn;
+            },
+          },
+          onShown: { addListener: () => {} },
+          onHidden: { addListener: () => {} },
+        },
+      };
+
+      const { initContextMenus } = await import('../src/menus.js');
+      let movedCalled = false;
+      initContextMenus(() => {
+        movedCalled = true;
+      });
+
+      await onClickedListener(
+        { menuItemId: 'synapse-move-to-ws-dev' },
+        { id: 105, windowId: 1, pinned: true }
+      );
+
+      expect(sessionValues.has('105:workspace_id')).toBe(false);
+      expect(movedCalled).toBe(false);
+    });
+  });
 });
+
 
