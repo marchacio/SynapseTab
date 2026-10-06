@@ -62,7 +62,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       redis: isRedisConnected ? 'connected' : 'disconnected',
       uptime: Math.floor(process.uptime()),
       timestamp: Math.floor(Date.now() / 1000),
-      version: '1.4.3',
+      version: '1.4.4',
     };
 
     if (!isRedisConnected) {
@@ -183,7 +183,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       const pinnedTabs: TabItem[] = snapshot.workspaces.flatMap((w) =>
         (w.tabs || []).filter((t) => t.pinned)
       );
-      const backupJson = exportToSynapseFormat(snapshot.workspaces, pinnedTabs, '1.4.3');
+      const backupJson = exportToSynapseFormat(snapshot.workspaces, pinnedTabs, '1.4.4');
 
       const record: BackupRecord = {
         id: backupId,
@@ -247,7 +247,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         exportToSynapseFormat(
           backup.snapshot.workspaces,
           backup.snapshot.workspaces.flatMap((w) => (w.tabs || []).filter((t) => t.pinned)),
-          '1.4.3'
+          '1.4.4'
         );
 
       reply.header('Content-Type', 'application/json; charset=utf-8');

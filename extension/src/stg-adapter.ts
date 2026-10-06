@@ -327,7 +327,7 @@ export function importFromStgFormat(rawData: any): StgImportResult {
     return {
       workspaces,
       pinnedTabs,
-      version: parsed.version || '1.4.3',
+      version: parsed.version || '1.4.4',
       groupCount: workspaces.length,
       tabCount: totalTabs,
       pinnedCount: pinnedTabs.length,

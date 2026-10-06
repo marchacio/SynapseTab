@@ -42,15 +42,6 @@ export function determineSyncAction(
     return 'pull';
   }
 
-  // If local browser session is missing remote workspaces/tabs (e.g. fresh start without session restore),
-  // it must pull to materialize the remote workspaces and tabs.
-  if (localInstance.isLocalSessionMissingTabs && serverSnapshot) {
-    const remoteTabCount = (serverSnapshot.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
-    if (remoteTabCount > 0) {
-      return 'pull';
-    }
-  }
-
   const remoteVersion = serverSnapshot.version;
   const remoteUpdatedAt = serverSnapshot.updated_at || 0;
   const hasLocalChanges = Boolean(localInstance.hasLocalChanges);
@@ -78,6 +69,16 @@ export function determineSyncAction(
       return 'push';
     }
 
+    // Equal version and no unpushed local changes:
+    // If local browser session is missing remote workspaces/tabs (e.g. fresh start without session restore),
+    // it must pull to materialize the remote workspaces and tabs.
+    if (localInstance.isLocalSessionMissingTabs) {
+      const remoteTabCount = (serverSnapshot.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
+      if (remoteTabCount > 0) {
+        return 'pull';
+      }
+    }
+
     // Equal version and no unpushed local changes -> identical, do nothing
     return 'none';
   }
@@ -96,6 +97,13 @@ export function determineSyncAction(
   // remoteUpdatedAt === localInstance.updatedAt
   if (hasLocalChanges) {
     return 'push';
+  }
+
+  if (localInstance.isLocalSessionMissingTabs) {
+    const remoteTabCount = (serverSnapshot.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
+    if (remoteTabCount > 0) {
+      return 'pull';
+    }
   }
 
   return 'none';

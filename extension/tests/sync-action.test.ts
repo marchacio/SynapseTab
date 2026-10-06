@@ -119,6 +119,38 @@ describe('determineSyncAction Pure Decision Engine', () => {
       expect(action).toBe('push');
     });
 
+    it('returns push when local version is higher than server even if isLocalSessionMissingTabs is true (laptop worked offline and closed tabs)', () => {
+      const serverSnapshot = createMockSnapshot(195, 1000);
+      serverSnapshot.workspaces[0].tabs = [
+        { uuid: 'tab-1', url: 'https://example.com/1', title: 'Example 1', pinned: false, index: 0 },
+        { uuid: 'tab-2', url: 'https://example.com/2', title: 'Example 2', pinned: false, index: 1 },
+      ];
+      // Laptop closed 2 tabs offline and bumped version to 196
+      const action = determineSyncAction(serverSnapshot, {
+        version: 196,
+        updatedAt: 1200,
+        hasLocalChanges: true,
+        initialSyncCompleted: true,
+        isLocalSessionMissingTabs: true,
+      });
+      expect(action).toBe('push');
+    });
+
+    it('returns push when versions match and hasLocalChanges is true even if isLocalSessionMissingTabs is true (offline modifications with closed tabs)', () => {
+      const serverSnapshot = createMockSnapshot(195, 1000);
+      serverSnapshot.workspaces[0].tabs = [
+        { uuid: 'tab-1', url: 'https://example.com/1', title: 'Example 1', pinned: false, index: 0 },
+      ];
+      const action = determineSyncAction(serverSnapshot, {
+        version: 195,
+        updatedAt: 1000,
+        hasLocalChanges: true,
+        initialSyncCompleted: true,
+        isLocalSessionMissingTabs: true,
+      });
+      expect(action).toBe('push');
+    });
+
     it('returns pull when server version is higher than local base version even if local has unpushed changes', () => {
       // Remote desktop pushed v7 while laptop was offline at v4 -> remote is ahead -> pull!
       const serverSnapshot = createMockSnapshot(7, 1000);

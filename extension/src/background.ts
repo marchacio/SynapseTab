@@ -188,6 +188,25 @@ async function updateStatus(statusUpdate: Partial<SyncStatus>): Promise<void> {
 }
 
 /**
+ * Increments the local version and marks that unpushed changes exist.
+ * Ensures the version is bumped and persisted immediately, even when offline.
+ */
+async function recordLocalChange(): Promise<number> {
+  const versionState = await getLocalVersionState();
+  const nextVersion = versionState.hasLocalChanges
+    ? Math.max(versionState.version, 1)
+    : versionState.version + 1;
+  const now = Math.floor(Date.now() / 1000);
+
+  await setLocalVersionState({
+    version: nextVersion,
+    updatedAt: now,
+    hasLocalChanges: true,
+  });
+  return nextVersion;
+}
+
+/**
  * Emits local state to the backend after the configured debounce delay.
  * Sets status to 'pending' while waiting for debounce.
  */
@@ -196,7 +215,7 @@ async function triggerPushSync(): Promise<void> {
     return;
   }
 
-  await setLocalVersionState({ hasLocalChanges: true });
+  await recordLocalChange();
   await updateStatus({ state: 'pending', errorMessage: null });
 
   if (debounceTimer) {
@@ -220,15 +239,34 @@ async function triggerPushSync(): Promise<void> {
 async function pushSync(forceIncrement = false): Promise<void> {
   if (isApplyingRemoteDiff) return;
 
+  let versionToPush = 1;
+  let updatedAtToPush = Math.floor(Date.now() / 1000);
+
   try {
     await updateStatus({ state: 'syncing', errorMessage: null });
     const settings = await loadSettings();
     const versionState = await getLocalVersionState();
 
-    const versionToPush = (versionState.hasLocalChanges || forceIncrement)
-      ? versionState.version + 1
-      : Math.max(versionState.version, 1);
-    const updatedAtToPush = Math.floor(Date.now() / 1000);
+    versionToPush = versionState.version;
+    updatedAtToPush = versionState.updatedAt || Math.floor(Date.now() / 1000);
+
+    if (forceIncrement) {
+      versionToPush = versionState.version + 1;
+      updatedAtToPush = Math.floor(Date.now() / 1000);
+      await setLocalVersionState({
+        version: versionToPush,
+        updatedAt: updatedAtToPush,
+        hasLocalChanges: true,
+      });
+    } else if (versionToPush === 0) {
+      versionToPush = 1;
+      updatedAtToPush = Math.floor(Date.now() / 1000);
+      await setLocalVersionState({
+        version: versionToPush,
+        updatedAt: updatedAtToPush,
+        hasLocalChanges: true,
+      });
+    }
 
     const localState = await WorkspaceManager.captureLocalState(
       settings.clientId,
@@ -264,6 +302,12 @@ async function pushSync(forceIncrement = false): Promise<void> {
       updatedAt: confirmedUpdatedAt,
     });
   } catch (err: any) {
+    // If push failed (e.g. offline NetworkError), ensure the bumped version and unpushed state remain persisted locally
+    await setLocalVersionState({
+      version: versionToPush,
+      updatedAt: updatedAtToPush,
+      hasLocalChanges: true,
+    });
     addDebugLog('error', 'push', `Push sync failed: ${err.message}`, err.stack || err);
     await updateStatus({
       state: 'error',
@@ -487,6 +531,35 @@ function setupLifecycleListeners(): void {
 }
 
 /**
+ * Setup network listeners to detect when device reconnects to Wi-Fi/Internet.
+ * If local unpushed changes exist, automatically pushes them to the server.
+ */
+function setupNetworkListeners(): void {
+  const target: any = typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : globalThis);
+  if (target && typeof target.addEventListener === 'function') {
+    target.addEventListener('online', async () => {
+      addDebugLog('info', 'network', 'Device connected to network (online event detected).');
+      try {
+        const versionState = await getLocalVersionState();
+        if (versionState.hasLocalChanges) {
+          addDebugLog('sync', 'network', `Network connection restored with pending local changes (v${versionState.version}). Pushing to server...`);
+          await pushSync();
+        } else {
+          const settings = await loadSettings();
+          const remoteState = await SynapseApiClient.fetchRemoteState(settings);
+          if (remoteState && (remoteState.version ?? 0) > versionState.version) {
+            addDebugLog('sync', 'network', `Network connection restored: server version (v${remoteState.version}) is newer than local (v${versionState.version}). Pulling...`);
+            await pullSync(false, remoteState);
+          }
+        }
+      } catch (err: any) {
+        addDebugLog('warn', 'network', `Network reconnection sync attempt failed: ${err.message}`);
+      }
+    });
+  }
+}
+
+/**
  * Evaluates whether the local browser session is missing remote workspaces/tabs
  * (for example, if Firefox started fresh without session restore, after a crash, or on a clean profile).
  */
@@ -702,6 +775,7 @@ function setupMessageListener(): void {
             isArchived: false,
           });
           await WorkspaceManager.saveStoredWorkspaces(stored);
+          await recordLocalChange();
           await pushSync();
           return { success: true, id };
         }
@@ -724,6 +798,7 @@ function setupMessageListener(): void {
             w.order = idx;
           });
           await WorkspaceManager.saveStoredWorkspaces(stored);
+          await recordLocalChange();
           await pushSync();
           return { success: true, id };
         }
@@ -750,6 +825,7 @@ function setupMessageListener(): void {
             reordered.push(item);
           }
           await WorkspaceManager.saveStoredWorkspaces(reordered);
+          await recordLocalChange();
           await pushSync();
           return { success: true };
         }
@@ -794,6 +870,7 @@ function setupMessageListener(): void {
           }
           await WorkspaceManager.saveStoredWorkspaces(stored);
           await updateActionIcon();
+          await recordLocalChange();
           await pushSync();
           return { success: true };
         }
@@ -828,6 +905,7 @@ function setupMessageListener(): void {
             isArchived: message.isArchived !== undefined ? message.isArchived : stored[targetIndex].isArchived,
           };
           await WorkspaceManager.saveStoredWorkspaces(stored);
+          await recordLocalChange();
           await pushSync();
           return { success: true };
         }
@@ -843,6 +921,7 @@ function setupMessageListener(): void {
               w.order = idx;
             });
             await WorkspaceManager.saveStoredWorkspaces(filtered);
+            await recordLocalChange();
             await pushSync();
             return { success: true };
           }
@@ -898,6 +977,7 @@ function setupMessageListener(): void {
             w.order = idx;
           });
           await WorkspaceManager.saveStoredWorkspaces(filtered);
+          await recordLocalChange();
           await pushSync();
           return { success: true };
         }
@@ -1366,6 +1446,7 @@ async function init(): Promise<void> {
   }
 
   setupLifecycleListeners();
+  setupNetworkListeners();
   setupMessageListener();
 
   // Startup sync decision: check if local instance is older, newer, or same
@@ -1387,7 +1468,9 @@ async function init(): Promise<void> {
     }
 
     const remoteTotalTabs = (remoteState?.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
-    const isMissingTabs = await checkLocalSessionMissingTabs(remoteState);
+    const isMissingTabs = (!versionState.hasLocalChanges && (versionState.version <= (remoteState?.version ?? 0)))
+      ? await checkLocalSessionMissingTabs(remoteState)
+      : false;
 
     const action = determineSyncAction(remoteState, {
       version: versionState.version,
