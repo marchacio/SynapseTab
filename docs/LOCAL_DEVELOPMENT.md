@@ -54,7 +54,7 @@ Expected JSON response:
   "redis": "connected",
   "uptime": 2,
   "timestamp": 1773329000,
-  "version": "1.4.4"
+  "version": "1.4.5"
 }
 ```
 

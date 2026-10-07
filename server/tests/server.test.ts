@@ -70,7 +70,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const data = response.json();
       expect(data.status).toBe('healthy');
       expect(data.redis).toBe('connected');
-      expect(data.version).toBe('1.4.4');
+      expect(data.version).toBe('1.4.5');
       expect(typeof data.uptime).toBe('number');
     });
   });
@@ -513,7 +513,7 @@ describe('SynapseTab Server Integration Tests', () => {
       expect(detail.snapshot.workspaces.length).toBe(2);
       expect(detail.backup).toBeDefined();
       expect(detail.backup.format).toBe('synapsetab-backup');
-      expect(detail.backup.version).toBe('1.4.4');
+      expect(detail.backup.version).toBe('1.4.5');
       expect(detail.backup.workspaces.length).toBe(2);
     });
 
@@ -544,7 +544,7 @@ describe('SynapseTab Server Integration Tests', () => {
       expect(downloadRes.headers['content-disposition']).toBe(`attachment; filename="synapsetab-backup-${backupId}.json"`);
       const body = downloadRes.json();
       expect(body.format).toBe('synapsetab-backup');
-      expect(body.version).toBe('1.4.4');
+      expect(body.version).toBe('1.4.5');
       expect(body.workspaces.length).toBe(2);
     });
 
@@ -798,7 +798,7 @@ describe('SynapseTab Server Integration Tests', () => {
       const detail = detailRes.json();
       expect(detail.backup).toBeDefined();
       expect(detail.backup.format).toBe('synapsetab-backup');
-      expect(detail.backup.version).toBe('1.4.4');
+      expect(detail.backup.version).toBe('1.4.5');
       expect(detail.backup.workspaces.length).toBe(2);
 
       // Running immediately again without time passing should NOT create another backup

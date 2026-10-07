@@ -560,7 +560,7 @@ function updatePresetChipsState(currentDelay: number): void {
 async function loadAndDisplayInformation(): Promise<void> {
   try {
     const manifest = browser.runtime.getManifest();
-    const version = manifest.version || '1.4.4';
+    const version = manifest.version || '1.4.5';
     if (infoVersionBadge) infoVersionBadge.textContent = `v${version}`;
     if (infoExtensionVersion) infoExtensionVersion.textContent = version;
     if (infoPlatformEngine) {

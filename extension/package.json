@@ -1,6 +1,6 @@
 {
   "name": "synapsetab-extension",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Mozilla Firefox MV3 extension for SynapseTab",
   "private": true,
   "type": "module",
