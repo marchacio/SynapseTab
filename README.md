@@ -52,7 +52,7 @@ docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d --build s
 
 ### Step 2: Install the Firefox Extension
 
-- **From Firefox Add-ons (AMO):** *(Publishing to Mozilla Add-ons in progress)*
+- **From Firefox Add-ons:** [Mozilla Add-on page](https://addons.mozilla.org/en-US/firefox/addon/synapsetab/)
 - **From Source Package:**
   1. Build the distributable extension package:
      ```bash
