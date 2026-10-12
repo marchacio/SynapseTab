@@ -88,9 +88,9 @@ const newWorkspaceInput = document.getElementById('newWorkspaceInput') as HTMLIn
 const confirmAddWsBtn = document.getElementById('confirmAddWsBtn') as HTMLButtonElement;
 const cancelAddWsBtn = document.getElementById('cancelAddWsBtn') as HTMLButtonElement;
 
-const pinnedSectionWrapper = document.getElementById('pinnedSectionWrapper') as HTMLElement;
-const pinnedCountBadge = document.getElementById('pinnedCountBadge') as HTMLElement;
-const pinnedTabsList = document.getElementById('pinnedTabsList') as HTMLElement;
+const pinnedSectionWrapper = document.getElementById('pinnedSectionWrapper') as HTMLElement | null;
+const pinnedCountBadge = document.getElementById('pinnedCountBadge') as HTMLElement | null;
+const pinnedTabsList = document.getElementById('pinnedTabsList') as HTMLElement | null;
 
 const activeWorkspaceTitle = document.getElementById('activeWorkspaceTitle') as HTMLElement;
 const tabCountBadge = document.getElementById('tabCountBadge') as HTMLElement;
@@ -560,7 +560,7 @@ function updatePresetChipsState(currentDelay: number): void {
 async function loadAndDisplayInformation(): Promise<void> {
   try {
     const manifest = browser.runtime.getManifest();
-    const version = manifest.version || '1.4.5';
+    const version = manifest.version || '1.4.6';
     if (infoVersionBadge) infoVersionBadge.textContent = `v${version}`;
     if (infoExtensionVersion) infoExtensionVersion.textContent = version;
     if (infoPlatformEngine) {
@@ -667,6 +667,9 @@ async function refreshState(): Promise<void> {
  * Renders global pinned tabs.
  */
 function renderPinnedTabs(pinnedTabs: browser.tabs.Tab[]): void {
+  if (!pinnedTabsList || !pinnedSectionWrapper || !pinnedCountBadge) {
+    return;
+  }
   pinnedTabsList.replaceChildren();
 
   if (pinnedTabs.length === 0) {

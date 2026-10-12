@@ -5,7 +5,7 @@ import { exportToStgFormat, importFromStgFormat } from './stg-adapter.js';
 import { exportToSynapseFormat, importFromSynapseFormat } from './backup-format.js';
 import { initContextMenus, setupContextMenus } from './menus.js';
 import { updateActionIcon } from './action-icon.js';
-import { determineSyncAction, isNonSyncUrl } from './sync-action.js';
+import { determineSyncAction, isNonSyncUrl, evaluateSessionMissingTabs, LocalTabSummary } from './sync-action.js';
 import { SynapseSettings, SyncStatus, SyncPayload, TabItem, Workspace, DebugLogLevel, DebugLogEntry, DebugDiagnostics } from './types.js';
 
 export const DEFAULT_DEBOUNCE_DELAY_MS = 3000;
@@ -21,6 +21,29 @@ const DEFAULT_SETTINGS: SynapseSettings = {
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let isApplyingRemoteDiff = false;
 let hasCompletedInitialPull = false;
+let memorySessionActive = false;
+
+async function isBrowserSessionActive(): Promise<boolean> {
+  try {
+    if (typeof browser !== 'undefined' && browser.storage?.session) {
+      const data = await browser.storage.session.get('synapse_session_active');
+      if (typeof data?.synapse_session_active === 'boolean') {
+        return data.synapse_session_active;
+      }
+    }
+  } catch { }
+  return memorySessionActive;
+}
+
+async function markBrowserSessionActive(): Promise<void> {
+  memorySessionActive = true;
+  try {
+    if (typeof browser !== 'undefined' && browser.storage?.session) {
+      await browser.storage.session.set({ synapse_session_active: true });
+    }
+  } catch { }
+}
+
 let currentStatus: SyncStatus = {
   state: 'idle',
   lastSyncTime: null,
@@ -565,59 +588,35 @@ function setupNetworkListeners(): void {
  */
 async function checkLocalSessionMissingTabs(remoteState: SyncPayload | null): Promise<boolean> {
   if (!remoteState) return false;
-  const remoteTabsCount = (remoteState.workspaces || []).reduce((acc, ws) => acc + (ws.tabs?.length || 0), 0);
-  if (remoteTabsCount === 0) return false;
-
-  const remoteUuids = new Set<string>();
-  for (const ws of (remoteState.workspaces || [])) {
-    for (const t of (ws.tabs || [])) {
-      if (t.uuid) remoteUuids.add(t.uuid);
-    }
-  }
 
   const allLocalTabs = await browser.tabs.query({});
-  let matchingCount = 0;
+  const tabSummaries: LocalTabSummary[] = [];
+
   for (const tab of allLocalTabs) {
     if (tab.id !== undefined) {
-      const uuid = await browser.sessions.getTabValue(tab.id, 'tab_uuid');
-      if (typeof uuid === 'string' && remoteUuids.has(uuid)) {
-        matchingCount++;
-      }
+      let uuid: string | undefined;
+      try {
+        const storedUuid = await browser.sessions.getTabValue(tab.id, 'tab_uuid');
+        if (typeof storedUuid === 'string' && storedUuid.length > 0) {
+          uuid = storedUuid;
+        }
+      } catch { }
+      tabSummaries.push({
+        id: tab.id,
+        url: tab.url,
+        uuid,
+      });
     }
   }
 
-  // If local browser has fewer matching tabs than the remote state, tabs are missing!
-  if (matchingCount < remoteTabsCount) {
+  const evaluation = evaluateSessionMissingTabs(remoteState, tabSummaries);
+  if (evaluation.isMissing) {
     addDebugLog(
       'info',
       'startup',
-      `Session tab disparity detected: only ${matchingCount}/${remoteTabsCount} remote tabs present locally.`
+      evaluation.reason || 'Local session is missing remote tabs.'
     );
     return true;
-  }
-
-  // Also check if any remote workspace with tabs is completely missing locally
-  for (const ws of (remoteState.workspaces || [])) {
-    if (ws.tabs && ws.tabs.length > 0) {
-      const wsUuids = new Set(ws.tabs.map((t) => t.uuid).filter(Boolean));
-      let wsMatch = 0;
-      for (const tab of allLocalTabs) {
-        if (tab.id !== undefined) {
-          const uuid = await browser.sessions.getTabValue(tab.id, 'tab_uuid');
-          if (typeof uuid === 'string' && wsUuids.has(uuid)) {
-            wsMatch++;
-          }
-        }
-      }
-      if (wsMatch === 0) {
-        addDebugLog(
-          'info',
-          'startup',
-          `Workspace "${ws.name}" (${ws.tabs.length} tabs) has 0 tabs locally.`
-        );
-        return true;
-      }
-    }
   }
 
   return false;
@@ -1412,17 +1411,89 @@ async function dismissStartupLoadingTab(
   }
 }
 
+let initPromise: Promise<void> | null = null;
+
 /**
  * Initialize extension background process.
  */
 async function init(): Promise<void> {
+  if (initPromise) {
+    return initPromise;
+  }
+  initPromise = doInit().finally(() => {
+    initPromise = null;
+  });
+  return initPromise;
+}
+
+async function doInit(): Promise<void> {
   await loadStoredLogs();
 
   // Initialize tab counts and register non-sync URLs
   await refreshTabCount();
   lastLoggedTabCount = currentTabCount;
 
-  addDebugLog('info', 'lifecycle', 'Background service initialized.');
+  const sessionAlreadyActive = await isBrowserSessionActive();
+
+  if (sessionAlreadyActive) {
+    // Background service awakened while browser session is already active
+    addDebugLog('info', 'lifecycle', 'Background service awakened (active browser session).');
+    hasCompletedInitialPull = true;
+
+    const settings = await loadSettings();
+    const stored = await WorkspaceManager.getStoredWorkspaces();
+    if (stored.length === 0) {
+      await WorkspaceManager.saveStoredWorkspaces([
+        { id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME },
+      ]);
+    }
+
+    if (typeof browser.alarms !== 'undefined' && browser.alarms.clearAll) {
+      await browser.alarms.clearAll().catch(() => { });
+    }
+
+    setupLifecycleListeners();
+    setupNetworkListeners();
+    setupMessageListener();
+    setupTabListeners();
+    await updateActionIcon();
+
+    // Evaluate sync state silently in background: only pull if remote version is strictly newer
+    try {
+      const versionState = await getLocalVersionState();
+      let remoteState: SyncPayload | null = null;
+      try {
+        remoteState = await SynapseApiClient.fetchRemoteState(settings);
+      } catch {
+        // Server unreachable or offline: continue with existing state
+        return;
+      }
+
+      if (remoteState && typeof remoteState.version === 'number' && remoteState.version > versionState.version) {
+        addDebugLog(
+          'sync',
+          'pull',
+          `Server contains newer version (v${remoteState.version} > v${versionState.version}). Pulling in background...`
+        );
+        await pullSync(false, remoteState);
+      } else if (versionState.hasLocalChanges) {
+        await triggerPushSync();
+      } else {
+        await updateStatus({
+          state: 'synced',
+          lastSyncTime: Date.now(),
+          errorMessage: null,
+        });
+      }
+    } catch (err: any) {
+      console.warn('[SynapseTab] Background wakeup sync check failed:', err);
+    }
+    return;
+  }
+
+  // --- Cold browser startup initialization path ---
+  addDebugLog('info', 'lifecycle', 'Background service initialized (browser startup).');
+  await markBrowserSessionActive();
   await loadSettings();
 
   // Ensure default workspace exists
@@ -1504,7 +1575,7 @@ async function init(): Promise<void> {
       );
       await pushSync();
     } else {
-      // action === 'none': local instance is the same stored in the home-server. Do nothing!
+      // action === 'none': local instance is identical to server. Do nothing!
       addDebugLog(
         'info',
         'startup',
@@ -1552,6 +1623,12 @@ if (typeof browser.runtime.onInstalled !== 'undefined' && browser.runtime.onInst
 if (typeof browser.runtime.onStartup !== 'undefined' && browser.runtime.onStartup.addListener) {
   browser.runtime.onStartup.addListener(() => {
     setupContextMenus();
+    memorySessionActive = false;
+    try {
+      if (typeof browser !== 'undefined' && browser.storage?.session) {
+        browser.storage.session.remove('synapse_session_active').catch(() => { });
+      }
+    } catch { }
   });
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineSyncAction, isNonSyncUrl } from '../src/sync-action.js';
+import { determineSyncAction, isNonSyncUrl, evaluateSessionMissingTabs, LocalTabSummary } from '../src/sync-action.js';
 import { SyncPayload } from '../src/types.js';
 
 describe('determineSyncAction Pure Decision Engine', () => {
@@ -273,6 +273,115 @@ describe('determineSyncAction Pure Decision Engine', () => {
       expect(isNonSyncUrl('http://localhost:8080')).toBe(false);
       expect(isNonSyncUrl('https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons')).toBe(false);
       expect(isNonSyncUrl('http://192.168.1.100:3000')).toBe(false);
+    });
+  });
+
+  describe('evaluateSessionMissingTabs pure evaluator', () => {
+    const createRemoteWithTabs = (count: number): SyncPayload => {
+      const tabs = Array.from({ length: count }, (_, i) => ({
+        uuid: `tab-uuid-${i + 1}`,
+        url: `https://example.com/${i + 1}`,
+        title: `Tab ${i + 1}`,
+        pinned: false,
+        index: i,
+      }));
+      return {
+        client_id: 'remote-1',
+        updated_at: 1000,
+        version: 366,
+        active_workspace_id: 'ws-1',
+        workspaces: [
+          {
+            id: 'ws-1',
+            name: 'Main',
+            tabs,
+          },
+        ],
+      };
+    };
+
+    it('returns isMissing: false when 96 out of 97 remote tabs match locally (user closed 1 tab or minor disparity)', () => {
+      const remote = createRemoteWithTabs(97);
+      // Local has 96 matching tabs
+      const localTabs: LocalTabSummary[] = Array.from({ length: 96 }, (_, i) => ({
+        id: i + 1,
+        url: `https://example.com/${i + 1}`,
+        uuid: `tab-uuid-${i + 1}`,
+      }));
+
+      const result = evaluateSessionMissingTabs(remote, localTabs);
+      expect(result.isMissing).toBe(false);
+      expect(result.matchingCount).toBe(96);
+      expect(result.remoteTabsCount).toBe(97);
+      expect(result.reason).toContain('Session is intact');
+    });
+
+    it('returns isMissing: false when even 1 remote tab matches locally', () => {
+      const remote = createRemoteWithTabs(50);
+      const localTabs: LocalTabSummary[] = [
+        { id: 1, url: 'https://example.com/1', uuid: 'tab-uuid-1' },
+      ];
+
+      const result = evaluateSessionMissingTabs(remote, localTabs);
+      expect(result.isMissing).toBe(false);
+      expect(result.matchingCount).toBe(1);
+    });
+
+    it('returns isMissing: true when 0 tabs match and local has only 1 default newtab (fresh launch without session restore)', () => {
+      const remote = createRemoteWithTabs(97);
+      const localTabs: LocalTabSummary[] = [
+        { id: 1, url: 'about:newtab', uuid: 'new-random-uuid' },
+      ];
+
+      const result = evaluateSessionMissingTabs(remote, localTabs);
+      expect(result.isMissing).toBe(true);
+      expect(result.matchingCount).toBe(0);
+      expect(result.remoteTabsCount).toBe(97);
+      expect(result.reason).toContain('Fresh browser session detected');
+    });
+
+    it('returns isMissing: true when 0 tabs match and local tab list is empty', () => {
+      const remote = createRemoteWithTabs(10);
+      const localTabs: LocalTabSummary[] = [];
+
+      const result = evaluateSessionMissingTabs(remote, localTabs);
+      expect(result.isMissing).toBe(true);
+      expect(result.matchingCount).toBe(0);
+    });
+
+    it('returns isMissing: false when remote has 0 tabs', () => {
+      const remote: SyncPayload = {
+        client_id: 'remote-1',
+        updated_at: 1000,
+        version: 1,
+        active_workspace_id: 'ws-1',
+        workspaces: [{ id: 'ws-1', name: 'Main', tabs: [] }],
+      };
+      const localTabs: LocalTabSummary[] = [
+        { id: 1, url: 'about:newtab' },
+      ];
+
+      const result = evaluateSessionMissingTabs(remote, localTabs);
+      expect(result.isMissing).toBe(false);
+      expect(result.remoteTabsCount).toBe(0);
+    });
+
+    it('returns isMissing: false when remote snapshot is null', () => {
+      const result = evaluateSessionMissingTabs(null, [{ id: 1, url: 'about:newtab' }]);
+      expect(result.isMissing).toBe(false);
+    });
+
+    it('returns isMissing: false when 0 tabs match but local has a full non-matching session (different URLs)', () => {
+      const remote = createRemoteWithTabs(5);
+      const localTabs: LocalTabSummary[] = [
+        { id: 1, url: 'https://github.com', uuid: 'unrelated-1' },
+        { id: 2, url: 'https://news.ycombinator.com', uuid: 'unrelated-2' },
+      ];
+
+      const result = evaluateSessionMissingTabs(remote, localTabs);
+      expect(result.isMissing).toBe(false);
+      expect(result.matchingCount).toBe(0);
+      expect(result.reason).toContain('active non-matching browsing state');
     });
   });
 });
