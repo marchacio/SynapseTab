@@ -10,6 +10,95 @@ export interface LocalInstanceVersion {
 
 export type SyncAction = 'pull' | 'push' | 'none';
 
+export interface LocalTabSummary {
+  id?: number;
+  url?: string;
+  uuid?: string;
+}
+
+export interface SessionMissingEvaluation {
+  isMissing: boolean;
+  matchingCount: number;
+  remoteTabsCount: number;
+  reason?: string;
+}
+
+/**
+ * Pure evaluation function to determine if the local browser session is missing remote tabs
+ * (for example, if Firefox started fresh without session restore, after a crash, or on a clean profile).
+ *
+ * Rules:
+ * 1. If remote has 0 tabs or is null, session cannot be missing.
+ * 2. If the local browser contains ANY tab matching remote UUIDs (matchingCount > 0),
+ *    the session was restored. Minor disparities (e.g. 96 matching tabs out of 97 remote tabs)
+ *    represent normal tab closures or non-sync tabs, NOT a lost browser session!
+ * 3. Only if ZERO remote tabs match (matchingCount === 0) AND the local browser is in a fresh/blank state
+ *    (e.g. 0-1 tabs, or all tabs are non-sync URLs like about:newtab/about:home) is the session truly missing.
+ */
+export function evaluateSessionMissingTabs(
+  remoteState: SyncPayload | null,
+  localTabs: LocalTabSummary[]
+): SessionMissingEvaluation {
+  if (!remoteState) {
+    return { isMissing: false, matchingCount: 0, remoteTabsCount: 0 };
+  }
+
+  const remoteTabsCount = (remoteState.workspaces || []).reduce(
+    (acc, ws) => acc + (ws.tabs?.length || 0),
+    0
+  );
+  if (remoteTabsCount === 0) {
+    return { isMissing: false, matchingCount: 0, remoteTabsCount: 0 };
+  }
+
+  const remoteUuids = new Set<string>();
+  for (const ws of remoteState.workspaces || []) {
+    for (const t of ws.tabs || []) {
+      if (t.uuid) remoteUuids.add(t.uuid);
+    }
+  }
+
+  let matchingCount = 0;
+  for (const tab of localTabs) {
+    if (tab.uuid && remoteUuids.has(tab.uuid)) {
+      matchingCount++;
+    }
+  }
+
+  // If local browser has tabs matching remote UUIDs, the session was restored by Firefox!
+  if (matchingCount > 0) {
+    return {
+      isMissing: false,
+      matchingCount,
+      remoteTabsCount,
+      reason: `Local browser has ${matchingCount}/${remoteTabsCount} matching tabs present. Session is intact.`,
+    };
+  }
+
+  // Zero tabs match: verify whether the browser is essentially in a clean/empty state
+  // (e.g. fresh launch with 0 or 1 default new/blank tab, or all non-sync tabs).
+  const isFreshBrowserWindow =
+    localTabs.length === 0 ||
+    localTabs.length === 1 ||
+    localTabs.every((tab) => isNonSyncUrl(tab.url));
+
+  if (isFreshBrowserWindow) {
+    return {
+      isMissing: true,
+      matchingCount: 0,
+      remoteTabsCount,
+      reason: `Fresh browser session detected: 0/${remoteTabsCount} remote tabs present locally.`,
+    };
+  }
+
+  return {
+    isMissing: false,
+    matchingCount: 0,
+    remoteTabsCount,
+    reason: `Local browser has active non-matching browsing state (${localTabs.length} tabs).`,
+  };
+}
+
 /**
  * Pure decision engine for synchronization.
  * Compares the version and timestamp of the instance saved in the server against the current Firefox instance:
