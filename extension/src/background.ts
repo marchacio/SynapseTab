@@ -510,6 +510,12 @@ function setupTabListeners(): void {
         knownNonSyncTabIds.add(activeInfo.tabId);
         return;
       }
+      if (tab && !tab.pinned && tab.id !== undefined && !isApplyingRemoteDiff) {
+        const activeWs = await WorkspaceManager.getActiveWorkspaceId();
+        const wsId = await WorkspaceManager.getTabWorkspaceId(tab.id, activeWs);
+        const uuid = await WorkspaceManager.getOrAssignTabUuid(tab.id);
+        await WorkspaceManager.setLastActiveTab(wsId, uuid, tab.url, tab.id);
+      }
     } catch { }
     onTabChange();
   });
@@ -748,7 +754,7 @@ function setupMessageListener(): void {
         case 'SWITCH_WORKSPACE': {
           isApplyingRemoteDiff = true;
           try {
-            await WorkspaceManager.switchToWorkspace(message.workspaceId);
+            await WorkspaceManager.switchToWorkspace(message.workspaceId, message.windowId);
             await updateActionIcon();
           } finally {
             setTimeout(() => {

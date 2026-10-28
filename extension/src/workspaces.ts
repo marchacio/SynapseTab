@@ -16,6 +16,12 @@ export interface StoredWorkspace {
   isArchived?: boolean;
 }
 
+export interface LastActiveTabInfo {
+  uuid: string;
+  url?: string;
+  tabId?: number;
+}
+
 /**
  * Checks whether a URL is a safe, standard web URL that can be passed to browser.tabs.create.
  */
@@ -86,22 +92,118 @@ export class WorkspaceManager {
   }
 
   /**
+   * Retrieves the map of last active tabs per workspace from storage.
+   */
+  static async getLastActiveTabMap(): Promise<Record<string, LastActiveTabInfo>> {
+    try {
+      const data = await browser.storage.local.get('last_active_tab_map');
+      if (data.last_active_tab_map && typeof data.last_active_tab_map === 'object') {
+        return data.last_active_tab_map;
+      }
+    } catch {}
+    return {};
+  }
+
+  /**
+   * Retrieves the last active tab info for a specific workspace.
+   */
+  static async getLastActiveTab(workspaceId: string): Promise<LastActiveTabInfo | null> {
+    const map = await this.getLastActiveTabMap();
+    return map[workspaceId] || null;
+  }
+
+  /**
+   * Persists the last active tab info for a specific workspace.
+   */
+  static async setLastActiveTab(workspaceId: string, tabUuid: string, url?: string, tabId?: number): Promise<void> {
+    if (!workspaceId || !tabUuid) return;
+    try {
+      const map = await this.getLastActiveTabMap();
+      map[workspaceId] = { uuid: tabUuid, url, tabId };
+      await browser.storage.local.set({ last_active_tab_map: map });
+    } catch (err) {
+      console.warn('[WorkspaceManager] Failed to set last active tab:', err);
+    }
+  }
+
+  /**
    * Initializes all existing tabs on extension startup, assigning UUIDs, workspace IDs,
-   * and ensuring inactive workspace tabs are properly hidden.
+   * restoring the last visited tab for the active workspace, and keeping inactive workspace tabs hidden.
    */
   static async initializeExistingTabs(): Promise<void> {
     const activeWsId = await this.getActiveWorkspaceId();
     const tabs = await browser.tabs.query({});
+    const activeWsTabs: browser.tabs.Tab[] = [];
+    const inactiveWsTabs: browser.tabs.Tab[] = [];
+
     for (const tab of tabs) {
       if (tab.id !== undefined) {
         await this.getOrAssignTabUuid(tab.id);
         const wsId = await this.getTabWorkspaceId(tab.id, activeWsId);
         await this.setTabWorkspaceId(tab.id, wsId);
 
-        // Hide tabs that belong to inactive workspaces (pinned tabs stay visible)
-        if (wsId !== activeWsId && !tab.pinned) {
+        if (wsId === activeWsId) {
+          activeWsTabs.push(tab);
+        } else if (!tab.pinned) {
+          inactiveWsTabs.push(tab);
+        }
+      }
+    }
+
+    // 1. Identify last visited tab in the active workspace
+    const lastActive = await this.getLastActiveTab(activeWsId);
+    let tabToActivate: browser.tabs.Tab | undefined;
+
+    if (activeWsTabs.length > 0) {
+      if (lastActive) {
+        for (const t of activeWsTabs) {
+          if (t.id !== undefined) {
+            const uuid = await this.getOrAssignTabUuid(t.id);
+            if (uuid === lastActive.uuid) {
+              tabToActivate = t;
+              break;
+            }
+          }
+        }
+        if (!tabToActivate && lastActive.url) {
+          tabToActivate = activeWsTabs.find((t) => t.url === lastActive.url);
+        }
+      }
+      if (!tabToActivate) {
+        tabToActivate = activeWsTabs.find((t) => t.active) || activeWsTabs[0];
+      }
+    }
+
+    // 2. Activate the last opened tab in the active workspace FIRST
+    // This ensures no inactive workspace tab remains focused in Firefox, allowing tabs.hide() to succeed
+    if (tabToActivate && tabToActivate.id !== undefined) {
+      try {
+        await browser.tabs.update(tabToActivate.id, { active: true });
+        const uuid = await this.getOrAssignTabUuid(tabToActivate.id);
+        await this.setLastActiveTab(activeWsId, uuid, tabToActivate.url, tabToActivate.id);
+      } catch (err) {
+        console.warn('[WorkspaceManager] Failed to activate last tab on startup:', err);
+      }
+    }
+
+    // 3. Hide tabs that belong to inactive workspaces
+    for (const tab of inactiveWsTabs) {
+      if (tab.id !== undefined && tab.id !== tabToActivate?.id) {
+        try {
+          await browser.tabs.hide(tab.id);
+        } catch {
+          // Ignored
+        }
+      }
+    }
+
+    // 4. Ensure non-active tabs in active workspace are kept suspended (discarded)
+    // so only the last visited page is loaded on startup
+    for (const tab of activeWsTabs) {
+      if (tab.id !== undefined && tab.id !== tabToActivate?.id && !tab.pinned && !tab.active) {
+        if (typeof browser.tabs.discard === 'function') {
           try {
-            await browser.tabs.hide(tab.id);
+            await browser.tabs.discard(tab.id);
           } catch {
             // Ignored
           }
@@ -268,9 +370,10 @@ export class WorkspaceManager {
   }
 
   /**
-   * Switches the active workspace, smoothly toggling tab visibility.
+   * Switches the active workspace, smoothly toggling tab visibility
+   * and restoring the last visited tab for the target workspace.
    */
-  static async switchToWorkspace(targetWorkspaceId: string): Promise<void> {
+  static async switchToWorkspace(targetWorkspaceId: string, targetWindowId?: number): Promise<void> {
     const currentActiveWsId = await this.getActiveWorkspaceId();
 
     const storedWorkspaces = await this.getStoredWorkspaces();
@@ -280,80 +383,130 @@ export class WorkspaceManager {
       return;
     }
 
-    if (currentActiveWsId === targetWorkspaceId) {
-      return;
+    // Determine target normal window
+    let windowId = targetWindowId;
+    if (windowId === undefined) {
+      try {
+        const normalWindows = await browser.windows.getAll({ windowTypes: ['normal'], populate: false });
+        const targetWin = normalWindows.find((w) => w.focused) || normalWindows[0];
+        windowId = targetWin?.id;
+      } catch {}
     }
-
-    // Update active workspace ID in storage
-    await this.setActiveWorkspaceId(targetWorkspaceId);
 
     let tabs: browser.tabs.Tab[] = [];
     try {
-      tabs = await browser.tabs.query({ currentWindow: true });
-      if (tabs.length === 0) {
-        tabs = await browser.tabs.query({ lastFocusedWindow: true });
-      }
-      if (tabs.length === 0) {
-        tabs = await browser.tabs.query({});
+      if (windowId !== undefined) {
+        tabs = await browser.tabs.query({ windowId });
+      } else {
+        tabs = await browser.tabs.query({ currentWindow: true });
+        if (tabs.length === 0) {
+          tabs = await browser.tabs.query({ lastFocusedWindow: true });
+        }
+        if (tabs.length === 0) {
+          tabs = await browser.tabs.query({});
+        }
       }
     } catch {
       try {
         tabs = await browser.tabs.query({});
       } catch {}
     }
-    const targetTabIds: number[] = [];
-    const hideTabIds: number[] = [];
+
+    const targetTabs: browser.tabs.Tab[] = [];
+    const hideTabs: browser.tabs.Tab[] = [];
 
     for (const tab of tabs) {
       if (tab.id === undefined) continue;
       const wsId = await this.getTabWorkspaceId(tab.id, currentActiveWsId);
 
       if (wsId === targetWorkspaceId) {
-        targetTabIds.push(tab.id);
+        targetTabs.push(tab);
       } else {
         if (!tab.pinned) {
-          hideTabIds.push(tab.id);
+          hideTabs.push(tab);
         }
       }
     }
 
-    // 1. If target workspace has tabs, show them and activate the first one
-    if (targetTabIds.length > 0) {
+    // If already in target workspace, verify whether the window tabs are already cleanly showing target workspace
+    if (currentActiveWsId === targetWorkspaceId) {
+      const hasForeignVisibleTab = hideTabs.some((t) => !t.hidden && !t.pinned);
+      const hasHiddenTargetTab = targetTabs.some((t) => t.hidden);
+      if (!hasForeignVisibleTab && !hasHiddenTargetTab && targetTabs.length > 0) {
+        return;
+      }
+    }
+
+    const targetTabIds = targetTabs.map((t) => t.id).filter((id): id is number => id !== undefined);
+
+    // 1. Determine tab to activate: last visited tab in target workspace
+    let tabToActivate: browser.tabs.Tab | undefined;
+    if (targetTabs.length > 0) {
+      const lastActive = await this.getLastActiveTab(targetWorkspaceId);
+      if (lastActive) {
+        for (const t of targetTabs) {
+          if (t.id !== undefined) {
+            const uuid = await this.getOrAssignTabUuid(t.id);
+            if (uuid === lastActive.uuid) {
+              tabToActivate = t;
+              break;
+            }
+          }
+        }
+        if (!tabToActivate && lastActive.url) {
+          tabToActivate = targetTabs.find((t) => t.url === lastActive.url);
+        }
+      }
+      if (!tabToActivate) {
+        tabToActivate = targetTabs[0];
+      }
+    }
+
+    // 2. If target workspace has tabs, show them and activate the target tab
+    if (targetTabIds.length > 0 && tabToActivate && tabToActivate.id !== undefined) {
       try {
         await browser.tabs.show(targetTabIds);
       } catch (err) {
-        console.warn('[WorkspaceManager] Failed to show target tabs:', err);
+        console.warn('[WorkspaceManager] Bulk show failed, attempting individual show:', err);
+        for (const id of targetTabIds) {
+          try {
+            await browser.tabs.show(id);
+          } catch {}
+        }
       }
       try {
-        await browser.tabs.update(targetTabIds[0], { active: true });
+        await browser.tabs.update(tabToActivate.id, { active: true });
       } catch (err) {
         console.warn('[WorkspaceManager] Failed to activate target tab:', err);
       }
-    } else {
+    } else if (targetTabIds.length === 0) {
       // If target workspace has no tabs, create one before hiding other tabs
       try {
         const createProps: browser.tabs._CreateCreateProperties = {
           active: true,
           url: 'about:blank',
         };
-        if (tabs.length > 0 && tabs[0].windowId !== undefined) {
+        if (windowId !== undefined) {
+          createProps.windowId = windowId;
+        } else if (tabs.length > 0 && tabs[0].windowId !== undefined) {
           createProps.windowId = tabs[0].windowId;
         }
         const newTab = await browser.tabs.create(createProps);
         if (newTab.id !== undefined) {
-          await this.getOrAssignTabUuid(newTab.id);
+          const newUuid = await this.getOrAssignTabUuid(newTab.id);
           await this.setTabWorkspaceId(newTab.id, targetWorkspaceId);
+          await this.setLastActiveTab(targetWorkspaceId, newUuid, newTab.url, newTab.id);
           targetTabIds.push(newTab.id);
+          tabToActivate = newTab;
         }
       } catch (err) {
         console.error('[WorkspaceManager] Failed to create tab for target workspace:', err);
       }
     }
 
-    // 2. Query fresh tab list in window to verify active state and safely hide inactive tabs
+    // 3. Query fresh tab list in window to verify active state and safely hide inactive tabs
     let freshTabs: browser.tabs.Tab[] = [];
     try {
-      const windowId = tabs.length > 0 ? tabs[0].windowId : undefined;
       freshTabs = windowId !== undefined
         ? await browser.tabs.query({ windowId })
         : await browser.tabs.query({ currentWindow: true });
@@ -365,16 +518,33 @@ export class WorkspaceManager {
         freshTabs = await browser.tabs.query({});
       } catch {}
     }
+
+    const hideIdSet = new Set(hideTabs.map((t) => t.id).filter((id): id is number => id !== undefined));
+    const activatedId = tabToActivate?.id;
+
+    // Filter out pinned tabs and the newly activated tab
     const canHideIds = freshTabs
-      .filter((t) => t.id !== undefined && hideTabIds.includes(t.id) && !t.pinned && !t.active)
+      .filter((t) => t.id !== undefined && hideIdSet.has(t.id) && !t.pinned && t.id !== activatedId)
       .map((t) => t.id as number);
 
     if (canHideIds.length > 0) {
       try {
         await browser.tabs.hide(canHideIds);
       } catch (err) {
-        console.warn('[WorkspaceManager] Failed to hide inactive tabs:', err);
+        console.warn('[WorkspaceManager] Bulk hide failed, attempting individual hide:', err);
+        for (const id of canHideIds) {
+          try {
+            await browser.tabs.hide(id);
+          } catch {}
+        }
       }
+    }
+
+    // 4. Update active workspace ID and last active tab in storage after tab state is settled
+    await this.setActiveWorkspaceId(targetWorkspaceId);
+    if (tabToActivate && tabToActivate.id !== undefined) {
+      const activeUuid = await this.getOrAssignTabUuid(tabToActivate.id);
+      await this.setLastActiveTab(targetWorkspaceId, activeUuid, tabToActivate.url, tabToActivate.id);
     }
   }
 
@@ -621,8 +791,21 @@ export class WorkspaceManager {
           }
         }
         if (activeWsTabs.length > 0 && !activeWsTabs.some((t) => t.active)) {
+          const lastActive = await this.getLastActiveTab(targetActiveWs);
+          let targetTab = activeWsTabs[0];
+          if (lastActive) {
+            for (const t of activeWsTabs) {
+              if (t.id !== undefined) {
+                const uuid = await this.getOrAssignTabUuid(t.id);
+                if (uuid === lastActive.uuid) {
+                  targetTab = t;
+                  break;
+                }
+              }
+            }
+          }
           try {
-            await browser.tabs.update(activeWsTabs[0].id!, { active: true });
+            await browser.tabs.update(targetTab.id!, { active: true });
           } catch {}
         }
       }

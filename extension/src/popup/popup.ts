@@ -560,7 +560,7 @@ function updatePresetChipsState(currentDelay: number): void {
 async function loadAndDisplayInformation(): Promise<void> {
   try {
     const manifest = browser.runtime.getManifest();
-    const version = manifest.version || '1.4.6';
+    const version = manifest.version || '1.5.0';
     if (infoVersionBadge) infoVersionBadge.textContent = `v${version}`;
     if (infoExtensionVersion) infoExtensionVersion.textContent = version;
     if (infoPlatformEngine) {
@@ -1222,13 +1222,13 @@ function renderWorkspacesList(workspaces: Workspace[], activeId: string): void {
       if (isTabMode) {
         openWorkspaceEditModal(ws, workspaces);
       } else {
-        if (ws.id !== activeId) {
-          await browser.runtime.sendMessage({
-            type: 'SWITCH_WORKSPACE',
-            workspaceId: ws.id,
-          });
-          await refreshState();
-        }
+        const currentWindow = await browser.windows.getCurrent().catch(() => null);
+        await browser.runtime.sendMessage({
+          type: 'SWITCH_WORKSPACE',
+          workspaceId: ws.id,
+          windowId: currentWindow?.id,
+        });
+        await refreshState();
       }
     });
 
